@@ -6,7 +6,7 @@ Created on Thu Jun 23, 2022
 
 import batch_update
 
-class Transform:
+class Transformation:
     def __init__(self, batch_update):
         # cache for storing the trajectories
         self.cache = {}
@@ -17,6 +17,6 @@ class Transform:
 
     def transform_trajectory(self, traj):
         vehicle_id = traj["id"]
-        
+
         print("transformed!")
         return 

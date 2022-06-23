@@ -6,7 +6,7 @@ Created on Thu Jun 23, 2022
 
 # from i24_database_api.DBReader import DBReader
 from multiprocessing import Process, Queue
-import transform
+import transformation
 import json
 
 def initialize_DB(config):
@@ -33,11 +33,11 @@ if __name__=="__main__":
     proc_change_stream.start()
     
     print("[Main] Starting Transformation process...")
-    proc_transform = Process(target=None, args=(change_stream_connection, ))
+    proc_transform = Process(target=None, args=(change_stream_connection, batch_update_connection, ))
     proc_transform.start()
 
     print("[Main] Starting Batch Update process...")
-    proc_batch_update = Process(target=None, args=(conn, ))
+    proc_batch_update = Process(target=None, args=(batch_update_connection, ))
     proc_batch_update.start()
     
     proc_change_stream.join()
