@@ -13,22 +13,34 @@ from pymongo import MongoClient, UpdateOne, InsertOne
 import json
 from pymongo.errors import BulkWriteError
 import time
-from collections import OrderedDict
+# from collections import OrderedDict
 from pprint import pprint
+from multiprocessing import Queue
 
 
 class BatchUpdate:
-    def __init__(self,  config: str=None,
-                        client_username: str=None, 
-                        client_password: str=None, 
-                        client_host: str=None, 
-                        client_port: int=None, 
-                        database: str=None, 
-                        collection: str=None, 
-                        buffer_time=6, 
+    def __init__(self,  staleness_threshold=100, 
                         wait_time=5):
-
         """
+        :param staleness_threshold: Number of new documents read that do not update a time until that
+        time is inserted to the transformed collection
+        :param wait_time: Time in seconds between reads from transformation
+        """
+        self._cache_data={}
+        self._staleness={}
+        self.staleness_threshold=staleness_threshold
+        self.wait_time=wait_time
+    
+    def connect_to_db(self, config: str=None,
+                            client_username: str=None, 
+                            client_password: str=None, 
+                            client_host: str=None, 
+                            client_port: int=None, 
+                            database: str=None, 
+                            collection: str=None,):
+        """
+        Connects to a MongoDB instance
+
         :param config: Optional config file containing the following params in JSON form.
         :param username: Database authentication username.
         :param password: Database authentication password.
@@ -36,9 +48,8 @@ class BatchUpdate:
         :param port: Database connection port number.
         :param database: Name of database to connect to (do not confuse with collection name).
         :param collection: Name of collection to connect to.
-        :param buffer_time: Time in seconds that documents stay in the cache without updates until insertion
-        :param wait_time: Time that batcher sleeps between checking if documents are ready for insert.
         """
+
         if config:
             with open('config.json') as f:
                 config_params = json.load(f)
@@ -46,8 +57,8 @@ class BatchUpdate:
                 client_username=config_params['username']
                 client_password=config_params['password']
                 client_host=config_params['host']
-                database=config_params['database_name']
-                collection=config_params['collection_name']
+                database=config_params['write_database_name']
+                collection=config_params['write_collection_name']
 
 
         self.client=MongoClient(host=client_host,
@@ -59,75 +70,95 @@ class BatchUpdate:
     
         self._database=self.client[database]
         self._collection=self._database[collection]
-        self._cache_data={}
-        self._staleness=OrderedDict()
-        self.buffer_time=buffer_time
-        self.wait_time=wait_time
-
         try:
             self.client.admin.command('ping')
         except pymongo.errors.ConnectionFailure:
             raise ConnectionError("Could not connect to MongoDB using pymongo, check connection addresses")
         except pymongo.errors.OperationFailure:
             raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
-        
-    
-    def connect_to_db():
-        """
-        define later
-        """
-    
-    def add_to_cache(self,subdoc: Dict = None):
+
+    def add_to_cache(self, subdoc: Dict = None):
         """
         Adds or appends subdocuments onto its respective
         time oriented document
         """
-        for key, value in subdoc.items():
-            if key in self._cache_data.keys(): 
-                self._cache_data[key][0].append(value[0])
-                self._cache_data[key][1].append(value[1])
-                self._cache_data[key][2].append(value[2])
-                self._staleness[key]=time.time()
+        # v1
+        batch=[]
+        subdoc_keys = list(subdoc.keys())
+        for key in list(self._staleness.keys()):
+            if key in subdoc.keys():
+                # insert & update
+                self._cache_data[key][0].append(subdoc[key][0])
+                self._cache_data[key][1].append(subdoc[key][1])
+                self._cache_data[key][2].append(subdoc[key][2])
+                self._staleness[key] = 0
+                subdoc_keys.remove(key)
             else:
-                self._cache_data[key]=[]
-                self._cache_data[key].append([value[0]]) #id
-                self._cache_data[key].append([value[1]]) #x
-                self._cache_data[key].append([value[2]]) #y
-                self._staleness[key]=time.time()
+                # current key does not exist in subdoc_key, so 
+                # increment its staleness
+                self._staleness[key] += 1
+                if(self._staleness[key]>=self.staleness_threshold):
+                    batch.append(UpdateOne({'time':key},{"$set":{'time':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
+                    self._staleness.pop(key)
+                    self._cache_data.pop(key)
+        # new keys that are in subdoc but not in staleness
+        # ... add to cache data
+        for key in subdoc_keys:
+            self._cache_data[key]=[]
+            self._cache_data[key].append([subdoc[key][0]]) #id
+            self._cache_data[key].append([subdoc[key][1]]) #x
+            self._cache_data[key].append([subdoc[key][2]]) #y
+            self._staleness[key]=0
+            subdoc_keys.remove(key)
 
+        # v2
+        # for key, value in subdoc.items():
+        #     if key in self._cache_data.keys(): 
+        #         self._cache_data[key][0].append(value[0])
+        #         self._cache_data[key][1].append(value[1])
+        #         self._cache_data[key][2].append(value[2])
+        #     else:
+        #         self._cache_data[key]=[]
+        #         self._cache_data[key].append([value[0]]) #id
+        #         self._cache_data[key].append([value[1]]) #x
+        #         self._cache_data[key].append([value[2]]) #y
+        #     self._staleness[key]=0
+        return batch
 
-    def send_batch(self):
+    def send_batch(self, batch_update_connection: Queue):
         """
         Checks to see if any documents has been not updated for a threshold time
         and arranges the document to be inserted, then inserts them through bulk update
         """
         
-        def first(od):
-            """
-            Return the first element from an ordered collection
-            or an arbitrary element from an unordered collection.
-            Raise StopIteration if the collection is empty.
-            """
-            return next(iter(od))
-
-        batch=[]
+        # def first(od):
+        #     """
+        #     Return the first element from an ordered collection
+        #     or an arbitrary element from an unordered collection.
+        #     Raise StopIteration if the collection is empty.
+        #     """
+        #     return next(iter(od))
+        
         # count=0
         while (True):
             # if count==3:
             #     testDoc12={}
             #     testDoc12[1]=[10,10,'x']
             #     self.add_to_cache(testDoc12)
-            current_time=time.time()
-            while(self._cache_data and ((current_time-first(self._staleness.values()))>self.buffer_time)):
-                stale_key=first(self._staleness)
-                stale_value=self._cache_data[stale_key]
+            obj_from_transformation = batch_update_connection.get()
+            batch = self.add_to_cache(obj_from_transformation)
+
+            # current_time=time.time()
+            # while(self._cache_data and ((current_time-first(self._staleness.values()))>self.buffer_time)):
+            #     stale_key=first(self._staleness)
+            #     stale_value=self._cache_data[stale_key]
                 # print(stale_key)
                 # print(stale_value)
-                batch.append(UpdateOne({'time':stale_key},{"$set":{'time':stale_key},"$push":{'id':{'$each':stale_value[0]},'x_position':{'$each':stale_value[1]},'y_position':{'$each':stale_value[2]}}},upsert=True))
-                # self._collection.update_many
-                # print('appended to batch '+str(stale_key))
-                self._staleness.popitem(last=False)
-                self._cache_data.pop(stale_key)
+                # batch.append(UpdateOne({'time':stale_key},{"$set":{'time':stale_key},"$push":{'id':{'$each':stale_value[0]},'x_position':{'$each':stale_value[1]},'y_position':{'$each':stale_value[2]}}},upsert=True))
+                # # self._collection.update_many
+                # # print('appended to batch '+str(stale_key))
+                # self._staleness.popitem(last=False)
+                # self._cache_data.pop(stale_key)
             
             if batch:
                 print(str(len(batch))+" documents in batch to insert")
@@ -146,7 +177,6 @@ class BatchUpdate:
             # count+=1
             # print('checked '+str(count))
             time.sleep(self.wait_time)
-    
 
     def __del__(self):
         """
@@ -157,4 +187,3 @@ class BatchUpdate:
             self.client.close()
         except:
             pass
-

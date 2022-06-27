@@ -3,6 +3,8 @@
 	"port": 27017,
 	"username": "",
 	"password": "",
-	"database_name": "",
-	"collection_name": ""
+	"read_database_name": "",
+	"read_collection_name": "",
+	"write_database_name": "",
+	"write_collection_name": ""
 }

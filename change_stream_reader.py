@@ -4,26 +4,32 @@ Created on Thu Jun 23
 
 """
 
+from multiprocessing import Queue
 from logging.config import listen
+from logging import exception
 import pymongo
-from pymongo import MongoClient
 import time
-from datetime import date
-from datetime import datetime
 import json
 
-
 class ChangeStreamReader:
-    def __init__(self, config: str=None,
-                        client_username: str=None, 
-                        client_password: str=None, 
-                        client_host: str=None, 
-                        client_port: int=None, 
-                        database: str=None, 
-                        collection: str=None, 
-                        read_frequency=1):
+    def __init__(self,read_frequency=1):
 
         """
+        :param read_frequency: Time in seconds that listener sleeps between checking for new inserts
+        """
+
+        self.read_frequency=read_frequency
+
+    def connect_to_db(self, config: str=None,
+                            client_username: str=None, 
+                            client_password: str=None, 
+                            client_host: str=None, 
+                            client_port: int=None, 
+                            database: str=None, 
+                            collection: str=None,):
+        """
+        Connects to a MongoDB instance.
+        
         :param config: Optional config file containing the following params in JSON form.
         :param username: Database authentication username.
         :param password: Database authentication password.
@@ -31,7 +37,6 @@ class ChangeStreamReader:
         :param port: Database connection port number.
         :param database: Name of database to connect to (do not confuse with collection name).
         :param collection: Name of collection to connect to.
-        :param read_frequency: Time in seconds that listener sleeps between checking for new inserts
         """
         if config:
             with open('config.json') as f:
@@ -40,35 +45,37 @@ class ChangeStreamReader:
                 client_username=config_params['username']
                 client_password=config_params['password']
                 client_host=config_params['host']
-                database=config_params['database_name']
-                collection=config_params['collection_name']
+                database=config_params['read_database_name']
+                collection=config_params['read_collection_name']
 
-        self.client=MongoClient(host=client_host,
-                                port=client_port,
-                                username=client_username,
-                                password=client_password,
-                                connect=True)
-
+        self.client=pymongo.MongoClient(host=client_host,
+                    port=client_port,
+                    username=client_username,
+                    password=client_password,
+                    connect=True,
+                    connectTimeoutMS=5000)
+    
+        self._database=self.client[database]
+        self._collection=self._database[collection]
         try:
             self.client.admin.command('ping')
         except pymongo.errors.ConnectionFailure:
-            raise ConnectionError("Could not connect to MongoDB using pymongo.")
-        
-        self._database=self.client[database]
-        self._collection=self._database[collection]
-        self.read_frequency=read_frequency
+            raise ConnectionError("Could not connect to MongoDB using pymongo, check connection addresses")
+        except pymongo.errors.OperationFailure:
+            raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
 
-    def listen(self,operation_type,resume_after=None):
+    def listen(self, change_stream_connection : Queue, resume_after=None):
         count=0
         try:
             # resume_token = None
-            pipeline = [{'$match': {'operationType': operation_type}}]
-            with self._collection.watch(pipeline,resume_after=resume_after) as stream:
+            # pipeline = [{'$match': {'operationType': operation_type}}]
+            with self._collection.watch(resume_after=resume_after) as stream:
                 for insert_change in stream:
                     print(insert_change['fullDocument']) #SEND
+                    change_stream_connection.send(insert_change['fullDocument'])
                     count+=1
                     resume_token = stream.resume_token
-                    # time.sleep(self.read_frequency)
+                    time.sleep(self.read_frequency)
                     if count==3:
                         stream.close()
         except pymongo.errors.PyMongoError:
@@ -82,7 +89,7 @@ class ChangeStreamReader:
                 # Use the interrupted ChangeStream's resume token to create
                 # a new ChangeStream. The new stream will continue from the
                 # last seen insert change without missing any events.
-                listen(self,operation_type,resume_after=resume_token)
+                listen(self, resume_after=resume_token)
                 print('stream restarted')
                 # with col.watch(
                 #         pipeline, resume_after=resume_token) as stream:
