@@ -6,7 +6,8 @@ Created on Thu Jun 23
 
 from multiprocessing import Queue
 from logging.config import listen
-from logging import exception
+# from logging import exception
+from sqlite3 import OperationalError
 import pymongo
 import time
 import json
