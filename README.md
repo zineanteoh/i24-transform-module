@@ -6,9 +6,10 @@ I24's Transform module for downstream traffic visualization and analysis (post-p
 
 The Transform module:
 
-1. Subscribes to a post-processed collection via mongoDB's change stream
-2. Transforms trajectories into a timestamp-based document
-3. Writes and updates the documents into a transformed mongoDB collection
+1. Subscribes to a post-processed collection via mongoDB's change stream (change_stream_reader.py)
+2. Transforms trajectories into a timestamp-based document (transformation.py)
+3. Writes and updates the documents into a transformed mongoDB collection (batch_update.py)
+4. Parallelizes step 1-3 with multiprocessing (main.py)
 
 ## How to run
 

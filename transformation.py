@@ -4,6 +4,8 @@ Created on Thu Jun 23, 2022
 @author: teohz
 """
 
+import multiprocessing
+
 class Transformation:
     def __init__(self, sample_rate = 30):
         # sample rate per second (must be a positive factor of 30)
@@ -52,7 +54,7 @@ class Transformation:
         #     print("dict[{}]: {}".format(op, batch_operations[op]))
         return batch_operations
 
-    def main_loop(self, change_stream_connection, batch_update_connection):
+    def main_loop(self, change_stream_connection: multiprocessing.Queue, batch_update_connection: multiprocessing.Queue):
         """
         A child process for transformation. 
         1. Listens to change_stream_connection for trajectory documents. 
