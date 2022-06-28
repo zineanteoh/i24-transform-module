@@ -19,7 +19,7 @@ from multiprocessing import Queue
 
 
 class BatchUpdate:
-    def __init__(self,  staleness_threshold=100, 
+    def __init__(self, config, staleness_threshold=2, 
                         wait_time=5):
         """
         :param staleness_threshold: Number of new documents read that do not update a time until that
@@ -30,6 +30,7 @@ class BatchUpdate:
         self._staleness={}
         self.staleness_threshold=staleness_threshold
         self.wait_time=wait_time
+        self.connect_to_db(config)
     
     def connect_to_db(self, config: str=None,
                             client_username: str=None, 
@@ -187,3 +188,7 @@ class BatchUpdate:
             self.client.close()
         except:
             pass
+
+def run(batch_update_connection):
+    batch_update_obj = BatchUpdate("config.json")
+    batch_update_obj.send_batch(batch_update_connection)

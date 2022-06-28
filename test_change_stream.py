@@ -1,6 +1,5 @@
 
 from pymongo import MongoClient
-import keyboard
 import urllib.parse
 
 username = urllib.parse.quote_plus('i24-data')
@@ -12,13 +11,14 @@ col=db["ground_truth_two"]
 dbwrite=client['lisatest']
 colwrite=dbwrite['read_v1']
 
+colwrite.drop()
 cursor=db['ground_truth_trajectories'].find().limit(100)
 tottime=0
 while True:
-    if keyboard.is_pressed('e'):
-        doc=cursor.next()
-        print('entering doc')
-        colwrite.insert_one(doc)
-
-        
+    user = input()
+    if user == "q":
+        break
+    doc=cursor.next()
+    print('entering doc')
+    colwrite.insert_one(doc)
 print(tottime/100)

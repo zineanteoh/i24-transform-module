@@ -13,13 +13,13 @@ import time
 import json
 
 class ChangeStreamReader:
-    def __init__(self,read_frequency=1):
+    def __init__(self, config, read_frequency=1):
 
         """
         :param read_frequency: Time in seconds that listener sleeps between checking for new inserts
         """
-
         self.read_frequency=read_frequency
+        self.connect_to_db(config)
 
     def connect_to_db(self, config: str=None,
                             client_username: str=None, 
@@ -67,18 +67,19 @@ class ChangeStreamReader:
 
     def listen(self, change_stream_connection : Queue, resume_after=None):
         count=0
+        print("change stream being listened")
         try:
             # resume_token = None
             # pipeline = [{'$match': {'operationType': operation_type}}]
             with self._collection.watch(resume_after=resume_after) as stream:
                 for insert_change in stream:
-                    print(insert_change['fullDocument']) #SEND
-                    change_stream_connection.send(insert_change['fullDocument'])
-                    count+=1
+                    print("THIS IS OUR DOC FROM CHAGNE STREAM {}".format(insert_change['fullDocument']['_id'])) #SEND
+                    change_stream_connection.put(insert_change['fullDocument'])
+                    # count+=1
                     resume_token = stream.resume_token
                     time.sleep(self.read_frequency)
-                    if count==3:
-                        stream.close()
+                    # if count==3:
+                    #     stream.close()
         except pymongo.errors.PyMongoError:
             # The ChangeStream encountered an unrecoverable error or the
             # resume attempt failed to recreate the cursor.
@@ -90,8 +91,8 @@ class ChangeStreamReader:
                 # Use the interrupted ChangeStream's resume token to create
                 # a new ChangeStream. The new stream will continue from the
                 # last seen insert change without missing any events.
-                listen(self, resume_after=resume_token)
                 print('stream restarted')
+                listen(self, resume_after=resume_token)
                 # with col.watch(
                 #         pipeline, resume_after=resume_token) as stream:
                 #     for insert_change in stream:
@@ -102,3 +103,7 @@ class ChangeStreamReader:
             self._collection.insert_one({'time':time.time()})
             print('inserted 1')
             time.sleep(5)
+
+def run(change_stream_connection):
+    chg_stream_reader_obj = ChangeStreamReader("config.json")
+    chg_stream_reader_obj.listen(change_stream_connection)
