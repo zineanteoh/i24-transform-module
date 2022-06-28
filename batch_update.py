@@ -61,7 +61,6 @@ class BatchUpdate:
                 database=config_params['write_database_name']
                 collection=config_params['write_collection_name']
 
-
         self.client=MongoClient(host=client_host,
                     port=client_port,
                     username=client_username,
@@ -85,9 +84,9 @@ class BatchUpdate:
         """
         # v1
         batch=[]
-        subdoc_keys = list(subdoc.keys())
-        for key in list(self._staleness.keys()):
-            if key in subdoc.keys():
+        subdoc_keys = list(subdoc)
+        for key in self._staleness:
+            if key in subdoc:
                 # insert & update
                 self._cache_data[key][0].append(subdoc[key][0])
                 self._cache_data[key][1].append(subdoc[key][1])
@@ -110,20 +109,6 @@ class BatchUpdate:
             self._cache_data[key].append([subdoc[key][1]]) #x
             self._cache_data[key].append([subdoc[key][2]]) #y
             self._staleness[key]=0
-            subdoc_keys.remove(key)
-
-        # v2
-        # for key, value in subdoc.items():
-        #     if key in self._cache_data.keys(): 
-        #         self._cache_data[key][0].append(value[0])
-        #         self._cache_data[key][1].append(value[1])
-        #         self._cache_data[key][2].append(value[2])
-        #     else:
-        #         self._cache_data[key]=[]
-        #         self._cache_data[key].append([value[0]]) #id
-        #         self._cache_data[key].append([value[1]]) #x
-        #         self._cache_data[key].append([value[2]]) #y
-        #     self._staleness[key]=0
         return batch
 
     def send_batch(self, batch_update_connection: Queue):
@@ -131,36 +116,14 @@ class BatchUpdate:
         Checks to see if any documents has been not updated for a threshold time
         and arranges the document to be inserted, then inserts them through bulk update
         """
-        
-        # def first(od):
-        #     """
-        #     Return the first element from an ordered collection
-        #     or an arbitrary element from an unordered collection.
-        #     Raise StopIteration if the collection is empty.
-        #     """
-        #     return next(iter(od))
-        
-        # count=0
-        while (True):
-            # if count==3:
-            #     testDoc12={}
-            #     testDoc12[1]=[10,10,'x']
-            #     self.add_to_cache(testDoc12)
-            obj_from_transformation = batch_update_connection.get()
-            batch = self.add_to_cache(obj_from_transformation)
 
-            # current_time=time.time()
-            # while(self._cache_data and ((current_time-first(self._staleness.values()))>self.buffer_time)):
-            #     stale_key=first(self._staleness)
-            #     stale_value=self._cache_data[stale_key]
-                # print(stale_key)
-                # print(stale_value)
-                # batch.append(UpdateOne({'time':stale_key},{"$set":{'time':stale_key},"$push":{'id':{'$each':stale_value[0]},'x_position':{'$each':stale_value[1]},'y_position':{'$each':stale_value[2]}}},upsert=True))
-                # # self._collection.update_many
-                # # print('appended to batch '+str(stale_key))
-                # self._staleness.popitem(last=False)
-                # self._cache_data.pop(stale_key)
-            
+        while (True):
+            obj_from_transformation = batch_update_connection.get()
+            start_time = time.time()
+            batch = self.add_to_cache(obj_from_transformation)
+            end_time = time.time()
+            print("time taken: {}".format(end_time - start_time))
+
             if batch:
                 print(str(len(batch))+" documents in batch to insert")
 
@@ -174,9 +137,7 @@ class BatchUpdate:
                 batch.clear()
             # else:
             #     print('Nothing has passed time threshold')
-
-            # count+=1
-            # print('checked '+str(count))
+            
             time.sleep(self.wait_time)
 
     def __del__(self):
