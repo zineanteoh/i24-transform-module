@@ -12,10 +12,12 @@ import pymongo
 from pymongo import MongoClient, UpdateOne, InsertOne
 import json
 from pymongo.errors import BulkWriteError
+# from time import thread_time
 import time
 # from collections import OrderedDict
 from pprint import pprint
 from multiprocessing import Queue
+# import math
 
 
 class BatchUpdate:
@@ -78,7 +80,7 @@ class BatchUpdate:
         except pymongo.errors.OperationFailure:
             raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
 
-    def add_to_cache(self, subdoc: Dict = None):
+    def add_to_cache(self, count,subdoc: Dict = None,):
         """
         Adds or appends subdocuments onto its respective
         time oriented document
@@ -99,7 +101,8 @@ class BatchUpdate:
                 # increment its staleness
                 self._staleness[key] += 1
                 if(self._staleness[key]>=self.staleness_threshold):
-                    batch.append(UpdateOne({'timestamp':key},{"$set":{'time':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
+                    batch.append(UpdateOne({'timestamp':key},{"$set":{'timestamp':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
+                    count+=1
                     self._staleness.pop(key)
                     self._cache_data.pop(key)
         # new keys that are in subdoc but not in staleness
@@ -126,7 +129,7 @@ class BatchUpdate:
         #     self._staleness[key]=0
         return batch
 
-    def send_batch(self, batch_update_connection: Queue):
+    def send_batch(self, batch_update_connection: Queue,test_cap):
         """
         Checks to see if any documents has been not updated for a threshold time
         and arranges the document to be inserted, then inserts them through bulk update
@@ -140,14 +143,16 @@ class BatchUpdate:
         #     """
         #     return next(iter(od))
         
-        # count=0
+        count=0
+        tot_ind_time=0
+        tot_ind_cache_time=0
+        tot_ind_write=0
+        st=time.time()
         while (True):
-            # if count==3:
-            #     testDoc12={}
-            #     testDoc12[1]=[10,10,'x']
-            #     self.add_to_cache(testDoc12)
+
             obj_from_transformation = batch_update_connection.get()
-            batch = self.add_to_cache(obj_from_transformation)
+            ind_st_cache=time.time()
+            batch = self.add_to_cache(count, obj_from_transformation)
 
             # current_time=time.time()
             # while(self._cache_data and ((current_time-first(self._staleness.values()))>self.buffer_time)):
@@ -160,24 +165,33 @@ class BatchUpdate:
                 # # print('appended to batch '+str(stale_key))
                 # self._staleness.popitem(last=False)
                 # self._cache_data.pop(stale_key)
-            
+            ind_et_cache=time.time()
             if batch:
-                print(str(len(batch))+" documents in batch to insert")
+                # print(str(len(batch))+" documents in batch to insert")
 
                 try:
                     result=self._collection.bulk_write(batch,ordered=False)
                 except BulkWriteError as bwe:
                     pprint(bwe.details)
                 
-                pprint(result.bulk_api_result)
+                # pprint(result.bulk_api_result)
                 print("inserted batch at time "+str(time.time()))
                 batch.clear()
+            ind_et_write=time.time()
+
+            tot_ind_cache_time+=ind_et_cache-ind_st_cache
+            tot_ind_write+=ind_et_write-ind_et_cache
             # else:
             #     print('Nothing has passed time threshold')
 
-            # count+=1
             # print('checked '+str(count))
             time.sleep(self.wait_time)
+
+            if self._collection.count_documents({})==17995:
+                et=time.time()
+                print("time to cache, batch, and insert: "+str(tot_ind_time))
+                print('time to add to cache: '+str(tot_ind_cache_time)+" time to write to database "+str(tot_ind_write))
+
 
     def __del__(self):
         """
@@ -189,6 +203,6 @@ class BatchUpdate:
         except:
             pass
 
-def run(batch_update_connection):
+def run(batch_update_connection, test_cap):
     batch_update_obj = BatchUpdate("config.json")
-    batch_update_obj.send_batch(batch_update_connection)
+    batch_update_obj.send_batch(batch_update_connection,test_cap)

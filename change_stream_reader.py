@@ -65,38 +65,41 @@ class ChangeStreamReader:
         except pymongo.errors.OperationFailure:
             raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
 
-    def listen(self, change_stream_connection : Queue, resume_after=None):
+    
+    def listen_stream(self, change_stream_connection : Queue, test_cap, resume_after=None):
         count=0
         print("change stream being listened")
+        st=time.time()
         try:
-            # resume_token = None
-            # pipeline = [{'$match': {'operationType': operation_type}}]
-            with self._collection.watch(resume_after=resume_after) as stream:
+            resume_token = None
+            pipeline=[{"$project":{"fullDocument._id":1,"fullDocument.timestamp":1,"fullDocument.x_position":1,"fullDocument.y_position":1}}]
+            with self._collection.watch(pipeline=pipeline,resume_after=resume_after) as stream:
                 for insert_change in stream:
                     print("THIS IS OUR DOC FROM CHAGNE STREAM {}".format(insert_change['fullDocument']['_id'])) #SEND
-                    change_stream_connection.put(insert_change['fullDocument'])
-                    # count+=1
+                    change_stream_connection.put(insert_change['fullDocument'])#TODO double check pls
+                    count+=1
                     resume_token = stream.resume_token
                     time.sleep(self.read_frequency)
-                    # if count==3:
-                    #     stream.close()
+                    if count==test_cap:
+                        et=time.time()
+                        # etthread=time.thread_time()
+                        print('time for listening and putting into queue: '+str(et-st))
+
         except pymongo.errors.PyMongoError:
-            # The ChangeStream encountered an unrecoverable error or the
-            # resume attempt failed to recreate the cursor.
-            if resume_token is None:
-                # There is no usable resume token because there was a
-                # failure during ChangeStream initialization.
-                raise Exception('change stream cursor failed and is unrecoverable')
-            else:
-                # Use the interrupted ChangeStream's resume token to create
-                # a new ChangeStream. The new stream will continue from the
-                # last seen insert change without missing any events.
-                print('stream restarted')
-                listen(self, resume_after=resume_token)
-                # with col.watch(
-                #         pipeline, resume_after=resume_token) as stream:
-                #     for insert_change in stream:
-                #         print(insert_change)
+            print('stream restarting')
+        # The ChangeStream encountered an unrecoverable error or the
+        # resume attempt failed to recreate the cursor.
+        if resume_token is None:
+            # There is no usable resume token because there was a
+            # failure during ChangeStream initialization.
+            raise Exception('change stream cursor failed and is unrecoverable')
+        else:
+            # Use the interrupted ChangeStream's resume token to create
+            # a new ChangeStream. The new stream will continue from the
+            # last seen insert change without missing any events.
+            print('stream restarted')
+            self.listen_stream(change_stream_connection, resume_token)
+
 
     def test_write(self):
         while True:
@@ -104,6 +107,6 @@ class ChangeStreamReader:
             print('inserted 1')
             time.sleep(5)
 
-def run(change_stream_connection):
+def run(change_stream_connection, test_cap):
     chg_stream_reader_obj = ChangeStreamReader("config.json")
-    chg_stream_reader_obj.listen(change_stream_connection)
+    chg_stream_reader_obj.listen_stream(change_stream_connection,test_cap)

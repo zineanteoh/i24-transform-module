@@ -2,6 +2,7 @@
 from pymongo import MongoClient
 import pymongo
 import urllib.parse
+import time
 
 username = urllib.parse.quote_plus('i24-data')
 password = urllib.parse.quote_plus('mongodb@i24')
@@ -26,4 +27,5 @@ while True:
     if count > 500:
         break
     read_collection.insert_one(doc)
+    # time.sleep(2)
 print("complete")
