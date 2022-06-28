@@ -5,6 +5,16 @@ Created on Thu Jun 23, 2022
 """
 
 import multiprocessing
+import math
+
+def round_and_truncate(number, digits) -> float:
+    # Improve accuracy with floating point operations, to avoid truncate(16.4, 2) = 16.39 or truncate(-1.13, 2) = -1.12
+    number = round(number, 7)
+    nbDecimals = len(str(number).split('.')[1]) 
+    if nbDecimals <= digits:
+        return number
+    stepper = 10.0 ** digits
+    return math.trunc(stepper * number) / stepper
 
 class Transformation:
     def __init__(self, sample_rate = 30):
@@ -35,7 +45,7 @@ class Transformation:
         vehicle_id = traj["_id"]
         batch_operations = {}
         for i in range(len(traj["timestamp"])):
-            time = traj["timestamp"][i]
+            time = round_and_truncate(traj["timestamp"][i], 5)
             x = traj["x_position"][i]
             y = traj["y_position"][i]
             batch_operations[time] = [vehicle_id, x, y]

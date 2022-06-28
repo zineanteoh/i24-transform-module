@@ -20,7 +20,7 @@ from multiprocessing import Queue
 
 class BatchUpdate:
     def __init__(self, config, staleness_threshold=2, 
-                        wait_time=5):
+                        wait_time=0):
         """
         :param staleness_threshold: Number of new documents read that do not update a time until that
         time is inserted to the transformed collection
@@ -99,7 +99,7 @@ class BatchUpdate:
                 # increment its staleness
                 self._staleness[key] += 1
                 if(self._staleness[key]>=self.staleness_threshold):
-                    batch.append(UpdateOne({'time':key},{"$set":{'time':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
+                    batch.append(UpdateOne({'timestamp':key},{"$set":{'time':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
                     self._staleness.pop(key)
                     self._cache_data.pop(key)
         # new keys that are in subdoc but not in staleness
@@ -172,8 +172,8 @@ class BatchUpdate:
                 pprint(result.bulk_api_result)
                 print("inserted batch at time "+str(time.time()))
                 batch.clear()
-            else:
-                print('Nothing has passed time threshold')
+            # else:
+            #     print('Nothing has passed time threshold')
 
             # count+=1
             # print('checked '+str(count))

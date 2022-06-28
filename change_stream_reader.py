@@ -13,7 +13,7 @@ import time
 import json
 
 class ChangeStreamReader:
-    def __init__(self, config, read_frequency=1):
+    def __init__(self, config, read_frequency=0):
 
         """
         :param read_frequency: Time in seconds that listener sleeps between checking for new inserts
