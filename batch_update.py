@@ -80,16 +80,16 @@ class BatchUpdate:
         except pymongo.errors.OperationFailure:
             raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
 
-    def add_to_cache(self, count,subdoc: Dict = None,):
+    def add_to_cache(self, subdoc: Dict = None,):
         """
         Adds or appends subdocuments onto its respective
         time oriented document
         """
         # v1
         batch=[]
-        subdoc_keys = list(subdoc.keys())
-        for key in list(self._staleness.keys()):
-            if key in subdoc.keys():
+        subdoc_keys = list(subdoc)
+        for key in self._staleness:
+            if key in subdoc:
                 # insert & update
                 self._cache_data[key][0].append(subdoc[key][0])
                 self._cache_data[key][1].append(subdoc[key][1])
@@ -102,7 +102,6 @@ class BatchUpdate:
                 self._staleness[key] += 1
                 if(self._staleness[key]>=self.staleness_threshold):
                     batch.append(UpdateOne({'timestamp':key},{"$set":{'timestamp':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
-                    count+=1
                     self._staleness.pop(key)
                     self._cache_data.pop(key)
         # new keys that are in subdoc but not in staleness
@@ -129,7 +128,7 @@ class BatchUpdate:
         #     self._staleness[key]=0
         return batch
 
-    def send_batch(self, batch_update_connection: Queue,test_cap):
+    def send_batch(self, batch_update_connection: Queue):
         """
         Checks to see if any documents has been not updated for a threshold time
         and arranges the document to be inserted, then inserts them through bulk update
@@ -143,7 +142,6 @@ class BatchUpdate:
         #     """
         #     return next(iter(od))
         
-        count=0
         tot_ind_time=0
         tot_ind_cache_time=0
         tot_ind_write=0
@@ -152,7 +150,7 @@ class BatchUpdate:
 
             obj_from_transformation = batch_update_connection.get()
             ind_st_cache=time.time()
-            staled_timestamps = self.add_to_cache(count, obj_from_transformation)
+            staled_timestamps = self.add_to_cache(obj_from_transformation)
 
             # current_time=time.time()
             # while(self._cache_data and ((current_time-first(self._staleness.values()))>self.buffer_time)):
@@ -203,6 +201,6 @@ class BatchUpdate:
         except:
             pass
 
-def run(batch_update_connection, test_cap):
+def run(batch_update_connection):
     batch_update_obj = BatchUpdate("config.json")
-    batch_update_obj.send_batch(batch_update_connection,test_cap)
+    batch_update_obj.send_batch(batch_update_connection)
