@@ -152,7 +152,7 @@ class BatchUpdate:
 
             obj_from_transformation = batch_update_connection.get()
             ind_st_cache=time.time()
-            batch = self.add_to_cache(count, obj_from_transformation)
+            staled_timestamps = self.add_to_cache(count, obj_from_transformation)
 
             # current_time=time.time()
             # while(self._cache_data and ((current_time-first(self._staleness.values()))>self.buffer_time)):
@@ -166,17 +166,17 @@ class BatchUpdate:
                 # self._staleness.popitem(last=False)
                 # self._cache_data.pop(stale_key)
             ind_et_cache=time.time()
-            if batch:
+            if staled_timestamps:
                 # print(str(len(batch))+" documents in batch to insert")
 
                 try:
-                    result=self._collection.bulk_write(batch,ordered=False)
+                    result=self._collection.bulk_write(staled_timestamps,ordered=False)
                 except BulkWriteError as bwe:
                     pprint(bwe.details)
                 
                 # pprint(result.bulk_api_result)
                 print("inserted batch at time "+str(time.time()))
-                batch.clear()
+                staled_timestamps.clear()
             ind_et_write=time.time()
 
             tot_ind_cache_time+=ind_et_cache-ind_st_cache

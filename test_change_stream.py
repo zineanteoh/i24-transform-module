@@ -15,6 +15,9 @@ write_collection=dbwrite['write_v1']
 
 read_collection.drop()
 write_collection.drop()
+
+write_collection.create_index([{'timestamp',1}]) # reduces write time by ~ 90 sec
+
 cursor=db['ground_truth_two'].find().sort([("first_timestamp",pymongo.ASCENDING),("last_timestamp",pymongo.ASCENDING)])
 user = input()
 # if user == "q":
