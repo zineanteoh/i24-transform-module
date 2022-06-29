@@ -13,13 +13,15 @@ import time
 import json
 
 class ChangeStreamReader:
-    def __init__(self, config, read_frequency=0):
+    def __init__(self, config, is_benchmark_on=False, benchmark_cap=499):
 
         """
-        :param read_frequency: Time in seconds that listener sleeps between checking for new inserts
+        :param is_benchmark_on: Boolean flag to enable/disable benchmarking.
         """
-        self.read_frequency=read_frequency
         self.connect_to_db(config)
+        self._is_benchmark_on = is_benchmark_on
+        if (self._is_benchmark_on):
+            self._benchmark_cap = benchmark_cap
 
     def connect_to_db(self, config: str=None,
                             client_username: str=None, 
@@ -66,24 +68,26 @@ class ChangeStreamReader:
             raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
 
     
-    def listen_stream(self, change_stream_connection : Queue, test_cap, resume_after=None):
-        count=0
+    def listen_stream(self, change_stream_connection : Queue, resume_after=None):
         print("change stream being listened")
-        st=time.time()
+        if self._is_benchmark_on:
+            st=time.time()
+            doc_count = 0
         try:
-            resume_token = None
-            pipeline=[{"$project":{"fullDocument._id":1,"fullDocument.timestamp":1,"fullDocument.x_position":1,"fullDocument.y_position":1}}]
+            # resume_token = None
+            pipeline = [{"$project":{"fullDocument._id":1,"fullDocument.timestamp":1,"fullDocument.x_position":1,"fullDocument.y_position":1}}]
             with self._collection.watch(pipeline=pipeline,resume_after=resume_after) as stream:
                 for insert_change in stream:
-                    print("THIS IS OUR DOC FROM CHAGNE STREAM {}".format(insert_change['fullDocument']['_id'])) #SEND
+                    print("[CSR] THIS IS OUR DOC FROM CHAGNE STREAM {}".format(insert_change['fullDocument']['_id'])) #SEND
                     change_stream_connection.put(insert_change['fullDocument'])#TODO double check pls
-                    count+=1
                     resume_token = stream.resume_token
-                    time.sleep(self.read_frequency)
-                    if count==test_cap:
-                        et=time.time()
-                        # etthread=time.thread_time()
-                        print('time for listening and putting into queue: '+str(et-st))
+
+                    if self._is_benchmark_on:
+                        doc_count += 1
+                        if doc_count == self._benchmark_cap:
+                            et=time.time()
+                            # etthread=time.thread_time()
+                            print('[CSR] time for listening and putting into queue: '+str(et-st))
 
         except pymongo.errors.PyMongoError:
             print('stream restarting')
@@ -107,6 +111,6 @@ class ChangeStreamReader:
             print('inserted 1')
             time.sleep(5)
 
-def run(change_stream_connection, test_cap):
-    chg_stream_reader_obj = ChangeStreamReader("config.json")
-    chg_stream_reader_obj.listen_stream(change_stream_connection,test_cap)
+def run(change_stream_connection):
+    chg_stream_reader_obj = ChangeStreamReader("config.json", is_benchmark_on=True, benchmark_cap=499)
+    chg_stream_reader_obj.listen_stream(change_stream_connection)

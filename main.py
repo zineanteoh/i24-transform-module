@@ -22,20 +22,18 @@ if __name__=="__main__":
     # - transform pushes mongoDB operation requests to this queue, which batch_update would listen from
     change_stream_connection = Queue()
     batch_update_connection = Queue()
-
-    test_cap=499
     
     # start all 3 child processes
     print("[Main] Starting Change Stream process...")
-    proc_change_stream = Process(target=change_stream_reader.run, args=(change_stream_connection, test_cap))
+    proc_change_stream = Process(target=change_stream_reader.run, args=(change_stream_connection, ))
     proc_change_stream.start()
     
     print("[Main] Starting Transformation process...")
-    proc_transform = Process(target=transformation.run, args=(change_stream_connection, batch_update_connection, test_cap))
+    proc_transform = Process(target=transformation.run, args=(change_stream_connection, batch_update_connection, ))
     proc_transform.start()
 
     print("[Main] Starting Batch Update process...")
-    proc_batch_update = Process(target=batch_update.run, args=(batch_update_connection, test_cap))
+    proc_batch_update = Process(target=batch_update.run, args=(batch_update_connection, ))
     proc_batch_update.start()
     
     proc_change_stream.join()
