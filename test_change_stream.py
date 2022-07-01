@@ -7,20 +7,20 @@ import time
 username = urllib.parse.quote_plus('i24-data')
 password = urllib.parse.quote_plus('mongodb@i24')
 client = MongoClient('mongodb://%s:%s@10.2.218.56' % (username, password))
-db=client["trajectories"]
+dbread=client["trajectories"]
 
 dbwrite=client['lisatest']
 
-read_collection=dbwrite['read_v1']
-write_collection=dbwrite['write_v1']
-read_collection.drop()
-write_collection.drop()
+read_collection=dbwrite['read_g2']
+write_collection=dbwrite['write_g2']
+# read_collection.drop()
+# write_collection.drop()
 
 # db.create_collection('read_v1')
 # db.create_collection('write_v1')
 write_collection.create_index([('timestamp',1)]) # reduces write time by ~ 90 sec
 
-cursor=db['ground_truth_two'].find().sort([("first_timestamp",pymongo.ASCENDING),("last_timestamp",pymongo.ASCENDING)])
+cursor=dbread['ground_truth_two'].find().sort([("first_timestamp",pymongo.ASCENDING),("last_timestamp",pymongo.ASCENDING)])
 user = input()
 # if user == "q":
     # break
