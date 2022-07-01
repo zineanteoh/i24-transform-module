@@ -25,8 +25,7 @@ user = input()
 # if user == "q":
     # break
 count = 0
-while True:
-    doc=cursor.next()
+for doc in cursor:
     print('entering doc {}'.format(count))
     count += 1
     # if count > 500:
