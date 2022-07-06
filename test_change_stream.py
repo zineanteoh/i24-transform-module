@@ -11,8 +11,8 @@ dbread=client["trajectories"]
 
 dbwrite=client['lisatest']
 
-read_collection=dbwrite['read_g2']
-write_collection=dbwrite['write_g2']
+read_collection=dbwrite['read_live_sim']
+write_collection=dbwrite['write_live_sim']
 # read_collection.drop()
 # write_collection.drop()
 
@@ -20,7 +20,7 @@ write_collection=dbwrite['write_g2']
 # db.create_collection('write_v1')
 write_collection.create_index([('timestamp',1)]) # reduces write time by ~ 90 sec
 
-cursor=dbread['ground_truth_two'].find().sort([("first_timestamp",pymongo.ASCENDING),("last_timestamp",pymongo.ASCENDING)])
+cursor=dbread['ground_truth_three'].find() #sort([("first_timestamp",pymongo.ASCENDING),("last_timestamp",pymongo.ASCENDING)])
 user = input()
 # if user == "q":
     # break
@@ -31,5 +31,5 @@ for doc in cursor:
     # if count > 500:
     #     break
     read_collection.insert_one(doc)
-    # time.sleep(2)
+    time.sleep(.2)
 print("complete")

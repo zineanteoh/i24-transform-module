@@ -47,7 +47,7 @@ class ChangeStreamReader:
                 client_host=config_params['host']
                 client_username=config_params['username']
                 client_password=config_params['password']
-                client_host=config_params['host']
+                client_port=config_params['port']
                 database=config_params['read_database_name']
                 collection=config_params['read_collection_name']
 
@@ -104,13 +104,6 @@ class ChangeStreamReader:
             print('stream restarted')
             self.listen_stream(change_stream_connection, resume_token)
 
-
-    def test_write(self):
-        while True:
-            self._collection.insert_one({'time':time.time()})
-            print('inserted 1')
-            time.sleep(5)
-
-def run(change_stream_connection):
-    chg_stream_reader_obj = ChangeStreamReader("config.json", is_benchmark_on=True, benchmark_cap=499)
+def run(change_stream_connection, is_benchmark_on, benchmark_cap):
+    chg_stream_reader_obj = ChangeStreamReader("config.json", is_benchmark_on=is_benchmark_on, benchmark_cap=benchmark_cap)
     chg_stream_reader_obj.listen_stream(change_stream_connection)

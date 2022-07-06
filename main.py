@@ -25,17 +25,17 @@ if __name__=="__main__":
     
     # start all 3 child processes
     print("[Main] Starting Change Stream process...")
-    proc_change_stream = Process(target=change_stream_reader.run, args=(change_stream_connection, ))
+    proc_change_stream = Process(target=change_stream_reader.run, args=(change_stream_connection, True, 1000))
     proc_change_stream.start()
     
     print("[Main] Starting Transformation process...")
-    proc_transform = Process(target=transformation.run, args=(change_stream_connection, batch_update_connection, ))
+    proc_transform = Process(target=transformation.run, args=(change_stream_connection, batch_update_connection, True, 1000, ))
     proc_transform.start()
 
     print("[Main] Starting Batch Update process...")
-    proc_batch_update = Process(target=batch_update.run, args=(batch_update_connection, ))
+    proc_batch_update = Process(target=batch_update.run, args=(batch_update_connection, True, 1000, ))
     proc_batch_update.start()
     
-    proc_change_stream.join()
+    # proc_change_stream.join()
     proc_transform.join()
     proc_batch_update.join()

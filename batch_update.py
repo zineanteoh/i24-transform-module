@@ -18,7 +18,7 @@ from multiprocessing import Queue
 import queue
 
 class BatchUpdate:
-    def __init__(self, config, staleness_threshold=2, 
+    def __init__(self, config, staleness_threshold=25, 
                         wait_time=0, is_benchmark_on=False, benchmark_cap=499):
         """
         :param staleness_threshold: Number of new documents read that do not update a time until that
@@ -32,6 +32,9 @@ class BatchUpdate:
         self._is_benchmark_on = is_benchmark_on
         if self._is_benchmark_on:
             self._benchmark_cap = benchmark_cap
+            self._start_all=time.time()
+
+        self.num_of_updates=0
 
         self.connect_to_db(config)
     
@@ -73,6 +76,8 @@ class BatchUpdate:
     
         self._database=self.client[database]
         self._collection=self._database[collection]
+        self._collection.create_index([('timestamp',1)])
+        
         try:
             self.client.admin.command('ping')
         except pymongo.errors.ConnectionFailure:
@@ -86,13 +91,23 @@ class BatchUpdate:
         except BulkWriteError as bwe:
             pprint(bwe.details)
         # pprint(result.bulk_api_result)
-        print("[BatchUpdate] inserted batch at time {}".format(str(time.time())))
+        new_updates=result.bulk_api_result['nModified']
+        self.num_of_updates+=new_updates
+        if new_updates!=0:
+            print("[BatchUpdate] inserted batch at time {}".format(str(time.time()))+" *updates performed")
+        else:
+            print("[BatchUpdate] inserted batch at time {}".format(str(time.time())))
+        print("[BatchUpdate] size of cache between batch_update and writing to mongo when stalled: "+str(len(self._cache_data)))
+        # print('number of documents modified '+str(result.bulk_api_result['nModified']))
+
+        # print('number of documents ')
 
     def clear_cache(self):
+        print('clearing cache')
         batch=[]
         for key in list(self._staleness):
             batch.append(UpdateOne({'timestamp':key},{"$set":{'timestamp':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
-            print("[BatchUpdate] ladies and gentleman we have our first staled timestamp: {}".format(key))
+            # print("[BatchUpdate] ladies and gentleman we have our first staled timestamp: {}".format(key))
             self._staleness.pop(key)
             self._cache_data.pop(key)
         return batch
@@ -117,9 +132,9 @@ class BatchUpdate:
                 # current key does not exist in subdoc_key, so 
                 # increment its staleness
                 self._staleness[key] += 1
-                if(self._staleness[key]>=self.staleness_threshold and key <= next(iter(self._staleness))):
+                if(self._staleness[key]>=self.staleness_threshold): #and key <= next(iter(self._staleness))):
                     batch.append(UpdateOne({'timestamp':key},{"$set":{'timestamp':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
-                    print("[BatchUpdate] ladies and gentleman we have our first staled timestamp: {}".format(key))
+                    # print("[BatchUpdate] ladies and gentleman we have our first staled timestamp: {}".format(key))
                     self._staleness.pop(key)
                     self._cache_data.pop(key)
         # new keys that are in subdoc but not in staleness
@@ -141,34 +156,44 @@ class BatchUpdate:
         """
 
         if self._is_benchmark_on:
-            tot_ind_time=0
-            tot_ind_cache_time=0
-            tot_ind_write=0
+            add_to_cache_time=0
+            insert_mongo_time=0
             st=time.time()
+            count=0
         while (True):
             try:
-                obj_from_transformation = batch_update_connection.get(timeout=5)
+                obj_from_transformation = batch_update_connection.get()
             except queue.Empty:
                 self.write_to_mongo(self.clear_cache())
                 print('emptied cache')
 
             if self._is_benchmark_on:
-                ind_st_cache=time.time()
+                time1=time.time()
             staled_timestamps = self.add_to_cache(obj_from_transformation)
-
             if self._is_benchmark_on:
-                ind_et_cache=time.time()
+                count+=1
+                time2=time.time()
             if staled_timestamps:
                 self.write_to_mongo(staled_timestamps)
             if self._is_benchmark_on:
-                ind_et_write=time.time()
-                tot_ind_cache_time+=ind_et_cache-ind_st_cache
-                tot_ind_write+=ind_et_write-ind_et_cache
-                if self._collection.count_documents({})==17995:
+                time3=time.time()
+                add_to_cache_time+=time2-time1
+                insert_mongo_time+=time3-time2
+                if count==self._benchmark_cap:
+                    # print(obj_from_transformation)
                     et=time.time()
-                    print("[BatchUpdate] time to cache, batch, and insert: "+str(tot_ind_time))
-                    print('[BatchUpdate] time to add to cache: '+str(tot_ind_cache_time)+" time to write to database "+str(tot_ind_write))
-                    print("[BatchUpdate] time taken for the entire process: {}".format(et-st))
+                    print("[BatchUpdate] time taken for the entire process including wait time: {}".format(et-st))
+                    print('[BatchUpdate] time to add to cache: '+str(add_to_cache_time))
+                    print("[BatchUpdate] time to write to database "+str(insert_mongo_time))
+
+                    ccst=time.time()
+                    self.write_to_mongo(self.clear_cache())
+                    ccet=time.time()
+                    print('[BatchUpdate] time to empty cache: '+str(ccet-ccst))
+                    print('[BatchUpdate] number of updates: '+str(self.num_of_updates))
+                    print('[TOTAL] time to finish entire process: '+str(ccet-self._start_all))
+                    break
+
             time.sleep(self.wait_time)
 
     def __del__(self):
@@ -181,6 +206,6 @@ class BatchUpdate:
         except:
             pass
 
-def run(batch_update_connection):
-    batch_update_obj = BatchUpdate("config.json", is_benchmark_on=True, benchmark_cap=499)
+def run(batch_update_connection, is_benchmark_on, benchmark_cap):
+    batch_update_obj = BatchUpdate(config="config.json", is_benchmark_on=is_benchmark_on, benchmark_cap=benchmark_cap)
     batch_update_obj.send_batch(batch_update_connection)
