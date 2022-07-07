@@ -54,15 +54,15 @@ def direct_feed(config, benchmark_cap, is_shuffled):
     return cursor
 
 class Transformation:
-    def __init__(self, sample_rate = 30, is_benchmark_on=False, benchmark_cap=499):
+    def __init__(self, sample_rate = 30, is_benchmark_on=False):# benchmark_cap=499):
         self.SAMPLE_RATE = sample_rate
         self.valid_sample_rate = 30 % self.SAMPLE_RATE == 0 and self.SAMPLE_RATE > 0
         if (not self.valid_sample_rate):
             print("[Transformation] Init ERROR: Sample rate is not valid. Needs to be a positive factor of 30")
         
         self._is_benchmark_on = is_benchmark_on
-        if self._is_benchmark_on:
-            self._benchmark_cap = benchmark_cap
+        # if self._is_benchmark_on:
+        #     self._benchmark_cap = benchmark_cap
 
     def transform_trajectory(self, traj):
         """
@@ -117,37 +117,46 @@ class Transformation:
         
         while True:
             if self._is_benchmark_on:
-                cursor=direct_feed(config="config.json",benchmark_cap=self._benchmark_cap,is_shuffled=True)
+                # cursor=direct_feed(config="config.json",benchmark_cap=self._benchmark_cap,is_shuffled=True)
                 # print (len(cursor))
                 # break
-                st_after_cursor=time.time()
-                for traj_doc in cursor:
+                # st_after_cursor=time.time()
+                # for traj_doc in cursor:
                     # print(traj_doc)
                     # break
 
-                    time1=time.time()
+                time1=time.time()
+                try:
+                    traj_doc=change_stream_connection.get(timeout=10)
+                except:
+                    print('connection timed out, possibly no more documents to load. Stopping process')
+                    et=time.time()
+                    print('[Transformation] time for entire transformation process: '+str(et-st))
+                    # print('[Transformation] time to generate cursor: '+str(st_after_cursor-st))
+                    print('[Transformation] time for only transform operation: '+str(transform_time))
+                    print('[Transformation] time for only adding the batch: '+str(send_batch_time))
+                    break
+                batch_operations = self.transform_trajectory(traj_doc)
+                time2=time.time()
+                batch_update_connection.put(batch_operations)
 
-                    batch_operations = self.transform_trajectory(traj_doc)
-                    time2=time.time()
-                    batch_update_connection.put(batch_operations)
+                time3=time.time()
+                count+=1
+                transform_time+=time2-time1
+                send_batch_time+=time3-time2
 
-                    time3=time.time()
-                    count+=1
-                    transform_time+=time2-time1
-                    send_batch_time+=time3-time2
-
-                
-                et=time.time()
-                print('[Transformation] time for entire transformation process: '+str(et-st))
-                print('[Transformation] time to generate cursor: '+str(st_after_cursor-st))
-                print('[Transformation] time for only transform operation: '+str(transform_time))
-                print('[Transformation] time for only adding the batch: '+str(send_batch_time))
-                break
+                # if(count>=self._benchmark_cap):
+                #     et=time.time()
+                #     print('[Transformation] time for entire transformation process: '+str(et-st))
+                #     # print('[Transformation] time to generate cursor: '+str(st_after_cursor-st))
+                #     print('[Transformation] time for only transform operation: '+str(transform_time))
+                #     print('[Transformation] time for only adding the batch: '+str(send_batch_time))
+                #     break
             else:
                 traj_doc = change_stream_connection.get()
                 batch_operations = self.transform_trajectory(traj_doc)
                 batch_update_connection.put(batch_operations)
     
-def run(change_stream_connection, batch_update_connection, is_benchmark_on, benchmark_cap):
-    transformation_obj = Transformation(is_benchmark_on=is_benchmark_on, benchmark_cap=benchmark_cap)
-    transformation_obj.main_loop(batch_update_connection=batch_update_connection)
+def run(change_stream_connection, batch_update_connection, is_benchmark_on):# benchmark_cap):
+    transformation_obj = Transformation(is_benchmark_on=is_benchmark_on)#, benchmark_cap=benchmark_cap)
+    transformation_obj.main_loop(change_stream_connection=change_stream_connection,batch_update_connection=batch_update_connection)

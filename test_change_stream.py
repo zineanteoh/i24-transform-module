@@ -20,7 +20,7 @@ write_collection=dbwrite['write_live_sim']
 # db.create_collection('write_v1')
 write_collection.create_index([('timestamp',1)]) # reduces write time by ~ 90 sec
 
-cursor=dbread['ground_truth_three'].find() #sort([("first_timestamp",pymongo.ASCENDING),("last_timestamp",pymongo.ASCENDING)])
+cursor=dbread['ground_truth_three'].find({},batch_size=500).limit(500) #sort([("first_timestamp",pymongo.ASCENDING),("last_timestamp",pymongo.ASCENDING)])
 user = input()
 # if user == "q":
     # break
@@ -28,8 +28,8 @@ count = 0
 for doc in cursor:
     print('entering doc {}'.format(count))
     count += 1
-    # if count > 500:
+    # if count > 500:s
     #     break
     read_collection.insert_one(doc)
-    time.sleep(.2)
+    time.sleep(.1)
 print("complete")

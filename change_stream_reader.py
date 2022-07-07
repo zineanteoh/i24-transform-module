@@ -76,18 +76,24 @@ class ChangeStreamReader:
         try:
             # resume_token = None
             pipeline = [{"$project":{"fullDocument._id":1,"fullDocument.timestamp":1,"fullDocument.x_position":1,"fullDocument.y_position":1}}]
-            with self._collection.watch(pipeline=pipeline,resume_after=resume_after) as stream:
+            with self._collection.watch(pipeline=pipeline,resume_after=resume_after,) as stream:
                 for insert_change in stream:
-                    print("[CSR] THIS IS OUR DOC FROM CHAGNE STREAM {}".format(insert_change['fullDocument']['_id'])) #SEND
+                    if doc_count%10==0:
+                        print("[CSR] read 10 docs")
+                    # print("[CSR] doc from change stream: {}".format(insert_change['fullDocument']['_id'])) #SEND
                     change_stream_connection.put(insert_change['fullDocument'])#TODO double check pls
                     resume_token = stream.resume_token
-
+                    doc_count += 1
                     if self._is_benchmark_on:
-                        doc_count += 1
                         if doc_count == self._benchmark_cap:
                             et=time.time()
                             # etthread=time.thread_time()
                             print('[CSR] time for listening and putting into queue: '+str(et-st))
+                        if doc_count>=self._benchmark_cap:
+                            print('[CSR] ending change stream reader')
+                            break
+                
+                stream.close()
 
         except pymongo.errors.PyMongoError:
             print('stream restarting')
