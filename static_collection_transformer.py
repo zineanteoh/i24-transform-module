@@ -77,6 +77,7 @@ class StaticCollectionTransformer:
             self._collection_to_copy_to.insert_one(doc)
 
         print("Collection has been duplicated")
+        self._collection_to_copy_from.drop()
 
 if __name__=="__main__":
     transformer = StaticCollectionTransformer()
