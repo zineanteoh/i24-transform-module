@@ -7,6 +7,10 @@ Created on Thu Jun 23, 2022
 import multiprocessing
 import math
 
+"""
+A helper function to round number to 5 digits and truncate the rest
+i.e. round_and_truncate(13921.0333333333) returns 13921.03333
+"""
 def round_and_truncate(number, digits) -> float:
     # Improve accuracy with floating point operations, to avoid truncate(16.4, 2) = 16.39 or truncate(-1.13, 2) = -1.12
     number = round(number, 7)
@@ -26,7 +30,7 @@ class Transformation:
 
     def transform_trajectory(self, traj):
         """
-        Accepts a trajectory document as parameter and return a dictionary of 
+        Accepts a trajectory document as parameter and returns a dictionary of 
         timestamps with the following schema: 
             {
                 t1: [id1, x1, y1],
@@ -49,8 +53,8 @@ class Transformation:
             x = traj["x_position"][i]
             y = traj["y_position"][i]
             batch_operations[time] = [vehicle_id, x, y]
-        first_key = list(batch_operations.keys())[0]
-        print("transformed doc into: {}".format(batch_operations[first_key]))
+        # first_key = list(batch_operations.keys())[0]
+        # print("transformed doc into: {}".format(batch_operations[first_key]))
         return batch_operations
 
     def main_loop(self, change_stream_connection: multiprocessing.Queue, batch_update_connection: multiprocessing.Queue):
@@ -71,7 +75,7 @@ class Transformation:
 
         while True:
             traj_doc = change_stream_connection.get()
-            print("[transformation] received doc")
+            # print("[transformation] received doc")
             batch_operations = self.transform_trajectory(traj_doc)
             batch_update_connection.put(batch_operations)
     

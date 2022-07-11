@@ -3,20 +3,16 @@ Created on Thu Jun 23
 @author: lisaliuu
 
 """
-# from logging import exception
-# from pydoc import cli
-from re import L
+from pymongo import MongoClient, UpdateOne
+from pymongo.errors import BulkWriteError
 from sqlite3 import OperationalError
+from multiprocessing import Queue
+from pprint import pprint
 from typing import Dict
 import pymongo
-from pymongo import MongoClient, UpdateOne, InsertOne
+import queue
 import json
-from pymongo.errors import BulkWriteError
 import time
-# from collections import OrderedDict
-from pprint import pprint
-from multiprocessing import Queue
-
 
 class BatchUpdate:
     def __init__(self, config, staleness_threshold=2, 
@@ -77,15 +73,37 @@ class BatchUpdate:
         except pymongo.errors.OperationFailure:
             raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
 
+    def write_to_mongo(self, staled_timestamps):
+        """
+        Performs bulk write to write all commands in staled_timestamps to MongoDB
+        :params staled_timestamps: a list of MongoDB UpdateOne() commands (upsert = True)
+        """
+        try:
+            self._collection.bulk_write(staled_timestamps,ordered=False)
+        except BulkWriteError as bwe:
+            pprint(bwe.details)
+        print("[BatchUpdate] inserted batch at time {}".format(str(time.time())))
+
+    def clear_cache(self):
+        """
+        Returns a list of MongoDB commands from the remaining timestamps inside of _staleness dictionary
+        :returns batch: a list of MongoDB UpdateOne() commands (upsert = True)
+        """
+        batch=[]
+        for key in list(self._staleness):
+            batch.append(UpdateOne({'timestamp':key},{"$set":{'timestamp':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
+            print("[BatchUpdate] clearing from cache the timestamp: {}".format(key))
+            self._staleness.pop(key)
+            self._cache_data.pop(key)
+        return batch
+
     def add_to_cache(self, subdoc: Dict = None):
         """
-        Adds or appends subdocuments onto its respective
-        time oriented document
+        Adds or appends subdocuments onto its respective time oriented document
         """
-        # v1
-        batch=[]
+        staled_timestamps=[]
         subdoc_keys = list(subdoc)
-        for key in self._staleness:
+        for key in list(self._staleness):
             if key in subdoc:
                 # insert & update
                 self._cache_data[key][0].append(subdoc[key][0])
@@ -97,8 +115,9 @@ class BatchUpdate:
                 # current key does not exist in subdoc_key, so 
                 # increment its staleness
                 self._staleness[key] += 1
-                if(self._staleness[key]>=self.staleness_threshold):
-                    batch.append(UpdateOne({'timestamp':key},{"$set":{'time':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
+                if(self._staleness[key]>=self.staleness_threshold and key <= next(iter(self._staleness))):
+                    staled_timestamps.append(UpdateOne({'timestamp':key},{"$set":{'timestamp':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
+                    print("[BatchUpdate] Automatically removing staled timestamp: {}".format(key))
                     self._staleness.pop(key)
                     self._cache_data.pop(key)
         # new keys that are in subdoc but not in staleness
@@ -109,7 +128,7 @@ class BatchUpdate:
             self._cache_data[key].append([subdoc[key][1]]) #x
             self._cache_data[key].append([subdoc[key][2]]) #y
             self._staleness[key]=0
-        return batch
+        return staled_timestamps
 
     def send_batch(self, batch_update_connection: Queue):
         """
@@ -118,26 +137,14 @@ class BatchUpdate:
         """
 
         while (True):
-            obj_from_transformation = batch_update_connection.get()
-            start_time = time.time()
-            batch = self.add_to_cache(obj_from_transformation)
-            end_time = time.time()
-            print("time taken: {}".format(end_time - start_time))
-
-            if batch:
-                print(str(len(batch))+" documents in batch to insert")
-
-                try:
-                    result=self._collection.bulk_write(batch,ordered=False)
-                except BulkWriteError as bwe:
-                    pprint(bwe.details)
-                
-                pprint(result.bulk_api_result)
-                print("inserted batch at time "+str(time.time()))
-                batch.clear()
-            # else:
-            #     print('Nothing has passed time threshold')
-            
+            try:
+                obj_from_transformation = batch_update_connection.get(timeout=5)
+            except queue.Empty:
+                self.write_to_mongo(self.clear_cache())
+                print('emptied cache')
+            staled_timestamps = self.add_to_cache(obj_from_transformation)
+            if staled_timestamps:
+                self.write_to_mongo(staled_timestamps)
             time.sleep(self.wait_time)
 
     def __del__(self):

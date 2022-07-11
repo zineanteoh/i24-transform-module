@@ -4,21 +4,19 @@ Created on Thu Jun 23
 
 """
 
-from multiprocessing import Queue
-from logging.config import listen
-# from logging import exception
 from sqlite3 import OperationalError
+from multiprocessing import Queue
+import pandas as pd
 import pymongo
 import time
 import json
 
 class ChangeStreamReader:
-    def __init__(self, config, read_frequency=0):
+    def __init__(self, config):
 
         """
-        :param read_frequency: Time in seconds that listener sleeps between checking for new inserts
+        :param config: Config file containing MongoDB credentials
         """
-        self.read_frequency=read_frequency
         self.connect_to_db(config)
 
     def connect_to_db(self, config: str=None,
@@ -65,38 +63,70 @@ class ChangeStreamReader:
         except pymongo.errors.OperationFailure:
             raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
 
-    def listen(self, change_stream_connection : Queue, resume_after=None):
-        count=0
+    def resample(self, car):
+        '''
+        resample the original time-series to uniformly sampled time series in 25Hz
+        leave nans for missing data
+        :param car: car document from MongoDB, containing field 'timestamp', 'x_position', 'y_position'
+        '''
+
+        # Select time series only
+        try:
+            time_series_field = ["timestamp", "x_position", "y_position"]
+            data = {key: car[key] for key in time_series_field}
+
+            # Read to dataframe and resample
+            df = pd.DataFrame(data, columns=data.keys()) 
+            index = pd.to_timedelta(df["timestamp"], unit='s')
+            df = df.set_index(index)
+            df = df.drop(columns = "timestamp")
+            # df = df.resample('0.04s').mean() # close to 25Hz
+            df=df.groupby(df.index.floor('0.04S')).mean().resample('0.04S').asfreq()
+            df.index = df.index.values.astype('datetime64[ns]').astype('int64')*1e-9
+
+            car['x_position'] = df['x_position'].values
+            car['y_position'] = df['y_position'].values
+            car['timestamp'] = df.index.values
+        except Exception as e:
+            print("error resampling: {}".format(e))
+        return car
+
+    def listen_stream(self, change_stream_connection : Queue, resume_after=None):
+        """
+        Listens to MongoDB stream via change stream and resamples document to send to 
+        change_stream_connection ready to be read by transformation.py
+        :params change_stream_connection: a multiprocessing Queue
+        :params resume_after: stream token to resume listening from change stream if cursor failed
+        """
         print("change stream being listened")
         try:
             # resume_token = None
             # pipeline = [{'$match': {'operationType': operation_type}}]
-            with self._collection.watch(resume_after=resume_after) as stream:
+            # with self._collection.watch(resume_after=resume_after) as stream:
+            pipeline = [{"$project":{"fullDocument._id":1,"fullDocument.timestamp":1,"fullDocument.x_position":1,"fullDocument.y_position":1}}]
+            with self._collection.watch(pipeline=pipeline,resume_after=resume_after) as stream:
                 for insert_change in stream:
-                    print("THIS IS OUR DOC FROM CHAGNE STREAM {}".format(insert_change['fullDocument']['_id'])) #SEND
-                    change_stream_connection.put(insert_change['fullDocument'])
-                    # count+=1
+                    print("[ChangeStreamReader] Read document {}".format(insert_change['fullDocument']['_id'])) #SEND
+                    # resample every document
+                    data_to_insert = self.resample(insert_change['fullDocument'])
+                    # interpolate every document
+                    # data_to_insert = self.interpolate(data_to_insert)
+                    change_stream_connection.put(data_to_insert) 
                     resume_token = stream.resume_token
-                    time.sleep(self.read_frequency)
-                    # if count==3:
-                    #     stream.close()
         except pymongo.errors.PyMongoError:
-            # The ChangeStream encountered an unrecoverable error or the
-            # resume attempt failed to recreate the cursor.
-            if resume_token is None:
-                # There is no usable resume token because there was a
-                # failure during ChangeStream initialization.
-                raise Exception('change stream cursor failed and is unrecoverable')
-            else:
-                # Use the interrupted ChangeStream's resume token to create
-                # a new ChangeStream. The new stream will continue from the
-                # last seen insert change without missing any events.
-                print('stream restarted')
-                listen(self, resume_after=resume_token)
-                # with col.watch(
-                #         pipeline, resume_after=resume_token) as stream:
-                #     for insert_change in stream:
-                #         print(insert_change)
+            print('stream restarting')
+        # The ChangeStream encountered an unrecoverable error or the
+        # resume attempt failed to recreate the cursor.
+        if resume_token is None:
+            # There is no usable resume token because there was a
+            # failure during ChangeStream initialization.
+            raise Exception('change stream cursor failed and is unrecoverable')
+        else:
+            # Use the interrupted ChangeStream's resume token to create
+            # a new ChangeStream. The new stream will continue from the
+            # last seen insert change without missing any events.
+            print('stream restarted')
+            self.listen_stream(change_stream_connection, resume_token)
 
     def test_write(self):
         while True:
@@ -106,4 +136,4 @@ class ChangeStreamReader:
 
 def run(change_stream_connection):
     chg_stream_reader_obj = ChangeStreamReader("config.json")
-    chg_stream_reader_obj.listen(change_stream_connection)
+    chg_stream_reader_obj.listen_stream(change_stream_connection)
