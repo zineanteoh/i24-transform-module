@@ -53,7 +53,7 @@ class BatchUpdate:
                 client_host=config_params['host']
                 client_username=config_params['username']
                 client_password=config_params['password']
-                client_host=config_params['host']
+                client_port=config_params['port']
                 database=config_params['write_database_name']
                 collection=config_params['write_collection_name']
 

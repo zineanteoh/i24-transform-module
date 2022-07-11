@@ -5,12 +5,10 @@ Created on Thu Jun 23, 2022
 """
 
 # from i24_database_api.DBReader import DBReader
-
 from multiprocessing import Process, Queue
 import transformation 
 import change_stream_reader 
 import batch_update
-import json
 
 if __name__=="__main__":
     # (Optional) Uncomment the following two lines if config.json cannot be loaded 
