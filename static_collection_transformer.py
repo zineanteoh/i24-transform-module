@@ -51,22 +51,23 @@ class StaticCollectionTransformer:
             raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
 
     def run(self):
-        print("Press <Enter> to start inserting documents from collection {} to {}".format(self.read_collection_name, self.read_collection_name + "_copy"))
+        # Rename original collection from "collection_name" to "collection_name_copy"
+        self._collection_to_copy_from.rename(self.read_collection_name + "_copy")
+        self._collection_to_copy_from = self._database[self.read_collection_name + "_copy"]
+        # Create a new empty collection called "collection_name"
+        self._collection_to_copy_to = self._database[self.read_collection_name]
+
         print("Make sure that main.py is running and that config.json contains:")
         print("\tread_database_name: {}".format(self.read_database_name))
-        print("\tread_collection_name: {}".format(self.read_collection_name + "_copy"))
+        print("\tread_collection_name: {}".format(self.read_collection_name))
+        print("ACTION: Press <Enter> to start inserting documents")
 
         while True:
             user = input()
             if user=="":
                 break
             else:
-                print("Press <Enter> to start inserting documents")
-
-        # Rename original collection from "collection_name" to "collection_name_copy"
-        self._collection_to_copy_from.rename(self.read_collection_name + "_copy")
-        # Create a new empty collection called "collection_name"
-        self._collection_to_copy_to = self._database[self.read_collection_name]
+                print("ACTION: Press <Enter> to start inserting documents")
 
         # Start inserting from "collection_name_copy" to "collection_name"
         cursor = self._collection_to_copy_from.find().sort([("first_timestamp",pymongo.ASCENDING),("last_timestamp",pymongo.ASCENDING)])
@@ -80,5 +81,5 @@ class StaticCollectionTransformer:
         self._collection_to_copy_from.drop()
 
 if __name__=="__main__":
-    transformer = StaticCollectionTransformer()
+    transformer = StaticCollectionTransformer("config.json")
     transformer.run()
