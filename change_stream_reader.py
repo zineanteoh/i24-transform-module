@@ -83,6 +83,7 @@ class ChangeStreamReader:
             # df = df.resample('0.04s').mean() # close to 25Hz
             df=df.groupby(df.index.floor('0.04S')).mean().resample('0.04S').asfreq()
             df.index = df.index.values.astype('datetime64[ns]').astype('int64')*1e-9
+            df = df.interpolate(method='linear')
 
             car['x_position'] = df['x_position'].values
             car['y_position'] = df['y_position'].values
