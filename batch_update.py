@@ -15,17 +15,14 @@ import json
 import time
 
 class BatchUpdate:
-    def __init__(self, config, staleness_threshold=2, 
-                        wait_time=0):
+    def __init__(self, config, staleness_threshold=25):
         """
         :param staleness_threshold: Number of new documents read that do not update a time until that
         time is inserted to the transformed collection
-        :param wait_time: Time in seconds between reads from transformation
         """
         self._cache_data={}
         self._staleness={}
         self.staleness_threshold=staleness_threshold
-        self.wait_time=wait_time
         self.connect_to_db(config)
     
     def connect_to_db(self, config: str=None,
@@ -90,7 +87,8 @@ class BatchUpdate:
         :returns batch: a list of MongoDB UpdateOne() commands (upsert = True)
         """
         batch=[]
-        for key in list(self._staleness):
+        temp_list = list(self._staleness)
+        for key in temp_list:
             batch.append(UpdateOne({'timestamp':key},{"$set":{'timestamp':key},"$push":{'id':{'$each':self._cache_data[key][0]},'x_position':{'$each':self._cache_data[key][1]},'y_position':{'$each':self._cache_data[key][2]}}},upsert=True))
             print("[BatchUpdate] clearing from cache the timestamp: {}".format(key))
             self._staleness.pop(key)
@@ -140,12 +138,14 @@ class BatchUpdate:
             try:
                 obj_from_transformation = batch_update_connection.get(timeout=5)
             except queue.Empty:
-                self.write_to_mongo(self.clear_cache())
-                print('emptied cache')
+                if batch_update_connection.empty() and len(self._cache_data)>0:
+                    self.write_to_mongo(self.clear_cache())
+                    print('emptied cache')
+                continue
             staled_timestamps = self.add_to_cache(obj_from_transformation)
+            # is_cache_emptied = False
             if staled_timestamps:
                 self.write_to_mongo(staled_timestamps)
-            time.sleep(self.wait_time)
 
     def __del__(self):
         """

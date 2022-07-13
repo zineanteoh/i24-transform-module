@@ -6,9 +6,7 @@ Created on Thu Jun 23
 
 from sqlite3 import OperationalError
 from multiprocessing import Queue
-import pandas as pd
 import pymongo
-import time
 import json
 
 class ChangeStreamReader:
@@ -63,35 +61,6 @@ class ChangeStreamReader:
         except pymongo.errors.OperationFailure:
             raise OperationalError("Could not connect to MongoDB using pymongo, check authentications")
 
-    def resample(self, car):
-        '''
-        resample the original time-series to uniformly sampled time series in 25Hz
-        leave nans for missing data
-        :param car: car document from MongoDB, containing field 'timestamp', 'x_position', 'y_position'
-        '''
-
-        # Select time series only
-        try:
-            time_series_field = ["timestamp", "x_position", "y_position"]
-            data = {key: car[key] for key in time_series_field}
-
-            # Read to dataframe and resample
-            df = pd.DataFrame(data, columns=data.keys()) 
-            index = pd.to_timedelta(df["timestamp"], unit='s')
-            df = df.set_index(index)
-            df = df.drop(columns = "timestamp")
-            # df = df.resample('0.04s').mean() # close to 25Hz
-            df=df.groupby(df.index.floor('0.04S')).mean().resample('0.04S').asfreq()
-            df.index = df.index.values.astype('datetime64[ns]').astype('int64')*1e-9
-            df = df.interpolate(method='linear')
-
-            car['x_position'] = df['x_position'].values
-            car['y_position'] = df['y_position'].values
-            car['timestamp'] = df.index.values
-        except Exception as e:
-            print("error resampling: {}".format(e))
-        return car
-
     def listen_stream(self, change_stream_connection : Queue, resume_after=None):
         """
         Listens to MongoDB stream via change stream and resamples document to send to 
@@ -108,11 +77,7 @@ class ChangeStreamReader:
             with self._collection.watch(pipeline=pipeline,resume_after=resume_after) as stream:
                 for insert_change in stream:
                     print("[ChangeStreamReader] Read document {}".format(insert_change['fullDocument']['_id'])) #SEND
-                    # resample every document
-                    data_to_insert = self.resample(insert_change['fullDocument'])
-                    # interpolate every document
-                    # data_to_insert = self.interpolate(data_to_insert)
-                    change_stream_connection.put(data_to_insert) 
+                    change_stream_connection.put(insert_change['fullDocument']) 
                     resume_token = stream.resume_token
         except pymongo.errors.PyMongoError:
             print('stream restarting')
@@ -128,12 +93,6 @@ class ChangeStreamReader:
             # last seen insert change without missing any events.
             print('stream restarted')
             self.listen_stream(change_stream_connection, resume_token)
-
-    def test_write(self):
-        while True:
-            self._collection.insert_one({'time':time.time()})
-            print('inserted 1')
-            time.sleep(5)
 
 def run(change_stream_connection):
     chg_stream_reader_obj = ChangeStreamReader("config.json")

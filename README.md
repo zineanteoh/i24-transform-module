@@ -13,7 +13,7 @@ The Transform module:
 3. Writes and updates the documents into a transformed mongoDB collection (batch_update.py)
 4. Parallelizes step 1-3 with multiprocessing (main.py)
 
-## How to transform an existing (static) collection using `static_collection_transformer.py`
+## Initialize config
 
 1. Clone the repository
 2. Create a `config.json` file using `config.template.json`.
@@ -36,5 +36,12 @@ The Transform module:
     }
     ```
 
-4. Run `static_collection_transformer.py`. Wait for prompt but do not press [Enter] key yet
-5. Run `main.py` on a separate terminal. Once all three processes are started, press the [Enter] key on the terminal running `static_collection_transformer.py`.
+## How to transform an existing (static) collection using `static_collection_transformer.py`
+
+1. Initialize config
+2. Run `run_static_transformer.py`
+
+## How to transform a dynamic collection using `run_dynamic_transformer.py`
+
+1. Initialize config
+2. Run `run_dynamic_transformer.py`
