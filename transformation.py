@@ -23,7 +23,7 @@ def round_and_truncate(number, digits) -> float:
     stepper = 10.0 ** digits
     return math.trunc(stepper * number) / stepper
 
-def resample(car):
+def resample(car, MODE):
     '''
     Original author: yanbing_wang
     resample the original time-series to uniformly sampled time series in 25Hz
@@ -32,26 +32,55 @@ def resample(car):
     '''
 
     # Select time series only
-    try:
-        time_series_field = ["timestamp", "x_position", "y_position"]
-        data = {key: car[key] for key in time_series_field}
+    if MODE == "RAW":
+        try:
+            time_series_field = ["timestamp", "x_position", "y_position", "length", "width", "height"]
+            data = {key: car[key] for key in time_series_field}
 
-        # Read to dataframe and resample
-        df = pd.DataFrame(data, columns=data.keys()) 
-        index = pd.to_timedelta(df["timestamp"], unit='s')
-        df = df.set_index(index)
-        df = df.drop(columns = "timestamp")
-        # df = df.resample('0.04s').mean() # close to 25Hz
-        df=df.groupby(df.index.floor('0.04S')).mean().resample('0.04S').asfreq()
-        df.index = df.index.values.astype('datetime64[ns]').astype('int64')*1e-9
-        df = df.interpolate(method='linear')
+            # Read to dataframe and resample
+            df = pd.DataFrame(data, columns=data.keys()) 
+            index = pd.to_timedelta(df["timestamp"], unit='s')
+            df = df.set_index(index)
+            df = df.drop(columns = "timestamp")
+            # df = df.resample('0.04s').mean() # close to 25Hz
+            df=df.groupby(df.index.floor('0.04S')).mean().resample('0.04S').asfreq()
+            df.index = df.index.values.astype('datetime64[ns]').astype('int64')*1e-9
+            df = df.interpolate(method='nearest')
 
-        car['x_position'] = df['x_position'].values
-        car['y_position'] = df['y_position'].values
-        car['timestamp'] = df.index.values
-    except Exception as e:
-        print("error resampling: {}".format(e))
-    return car
+            car['x_position'] = df['x_position'].values
+            car['y_position'] = df['y_position'].values
+            car['length'] = df['length'].values
+            car['width'] = df['width'].values
+            car['height'] = df['height'].values
+            car['timestamp'] = df.index.values
+        except Exception as e:
+            print("error resampling: {}".format(e))
+        return car
+
+    elif MODE == "RECONCILED":
+        try:
+            time_series_field = ["timestamp", "x_position", "y_position"]
+            data = {key: car[key] for key in time_series_field}
+
+            # Read to dataframe and resample
+            df = pd.DataFrame(data, columns=data.keys()) 
+            index = pd.to_timedelta(df["timestamp"], unit='s')
+            df = df.set_index(index)
+            df = df.drop(columns = "timestamp")
+            # df = df.resample('0.04s').mean() # close to 25Hz
+            df=df.groupby(df.index.floor('0.04S')).mean().resample('0.04S').asfreq()
+            df.index = df.index.values.astype('datetime64[ns]').astype('int64')*1e-9
+            df = df.interpolate(method='nearest')
+
+            car['x_position'] = df['x_position'].values
+            car['y_position'] = df['y_position'].values
+            car['timestamp'] = df.index.values
+        except Exception as e:
+            print("error resampling: {}".format(e))
+        return car
+    
+    else:
+        raise Exception("Unable to determine whether data is RAW or RECONCILED trajectories. Aborting program")
 
 class Transformation:
     def __init__(self, is_collection_dynamic, sample_rate = 25):
@@ -127,7 +156,7 @@ class Transformation:
             # transform raw data
             for i in range(len(traj["timestamp"])):
                 time = round_and_truncate(traj["timestamp"][i], 5)
-                print(len(traj["timestamp"]), len(traj["x_position"]), len(traj["y_position"]), len(traj["length"]), len(traj["width"]), len(traj["height"]))
+                # print(len(traj["timestamp"]), len(traj["x_position"]), len(traj["y_position"]), len(traj["length"]), len(traj["width"]), len(traj["height"]))
                 x = traj["x_position"][i]
                 y = traj["y_position"][i]
                 l = traj["length"][i]
@@ -183,13 +212,15 @@ class Transformation:
         else:
             # Transformer is called from run_static_transformer.py
             # ... collection is static, so we can just read the collection
-            traj_doc = self.read_static_collection("config.json")
+            traj_doc = self.read_static_collection("config.json",1)
             for doc in traj_doc:
-                if MODE == None:
+                if MODE == "":
                     MODE = self.determine_mode(doc)
+                    print('mode in transformation: '+MODE)
                 print("inserting doc: {}".format(doc["_id"]))
-                batch_operations = self.transform_trajectory(MODE, resample(doc))
+                batch_operations = self.transform_trajectory(MODE, resample(doc, MODE))
                 batch_update_connection.put(batch_operations)
+                print('put into batch_update')
 
 def run(MODE, change_stream_connection, batch_update_connection):
     if change_stream_connection == None:

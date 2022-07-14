@@ -3,6 +3,7 @@ Created on Thu Jun 23
 @author: lisaliuu
 
 """
+from sys import breakpointhook
 from pymongo import MongoClient, UpdateOne
 from pymongo.errors import BulkWriteError
 from sqlite3 import OperationalError
@@ -265,7 +266,7 @@ class BatchUpdate:
                 self._staleness[key]=0
         else:
             raise ValueError("Invalid MODE, must be either 'RAW' or 'RECONCILED'")
-        
+            
         return staled_timestamps
 
     def main_loop(self, MODE, batch_update_connection: Queue):
@@ -275,6 +276,7 @@ class BatchUpdate:
         """
 
         while (True):
+            # print('getting from batch update')
             try:
                 obj_from_transformation = batch_update_connection.get(timeout=5)
             except queue.Empty:
@@ -282,6 +284,8 @@ class BatchUpdate:
                     self.write_to_mongo(self.clear_cache(MODE))
                     print('emptied cache')
                 continue
+            print("mode in batch_udpate"+obj_from_transformation)
+            break
             staled_timestamps = self.add_to_cache(MODE, obj_from_transformation)
             # is_cache_emptied = False
             if staled_timestamps:

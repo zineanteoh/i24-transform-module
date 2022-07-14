@@ -17,7 +17,7 @@ if __name__=="__main__":
 
     # Mode for the transformation module, automatically determined
     # ... initialize as None
-    mode = None
+    # mode = None
 
     # initialize Queue for multiprocessing
     # - change_stream_reader pushes trajectories to this queue, which transform would listen from
