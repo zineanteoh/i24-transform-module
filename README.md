@@ -1,8 +1,12 @@
 # i24-transform-module
 
-I24's Transform module for downstream traffic visualization and analysis (post-post processing)
+I24's Transform module for downstream traffic visualization and analysis (post-post processing). 
 
-![transform_module](https://user-images.githubusercontent.com/58854510/177854618-4b249c1d-7bac-4e26-8375-8aadc59d05a3.png)
+The module is collection-agnostic, meaning it can transform both RAW and RECONCILED collections without explicit configuration. 
+
+![transform_raw](https://user-images.githubusercontent.com/58854510/179090837-b10606c4-001d-4d8b-aaad-92dafc97dbff.png)
+![transform_reconciled](https://user-images.githubusercontent.com/58854510/179090843-53eb1360-28b1-4b5d-afc4-13d31de09c7e.png)
+
 
 ## High level overview
 
