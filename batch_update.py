@@ -63,6 +63,8 @@ class BatchUpdate:
     
         self._database=self.client[database]
         self._collection=self._database[collection]
+        # create timestamp index
+        self._collection.create_index('timestamp', unique=True)
         try:
             self.client.admin.command('ping')
         except pymongo.errors.ConnectionFailure:
