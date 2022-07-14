@@ -32,11 +32,11 @@ if __name__=="__main__":
     proc_transform = Process(target=transformation.run, args=(mode, None, batch_update_connection, ))
     proc_transform.start()
 
-    # print("[Main] Starting Batch Update process...")
-    # proc_batch_update = Process(target=batch_update.run, args=(mode, batch_update_connection, ))
-    # proc_batch_update.start()
+    print("[Main] Starting Batch Update process...")
+    proc_batch_update = Process(target=batch_update.run, args=(mode, batch_update_connection, ))
+    proc_batch_update.start()
     
     proc_transform.join()
-    # proc_batch_update.join()
+    proc_batch_update.join()
 
-    print('mode is '+ mode.value)
+    # print('mode is '+ mode.value)

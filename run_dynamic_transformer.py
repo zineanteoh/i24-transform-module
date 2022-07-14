@@ -5,10 +5,11 @@ Created on Thu Jun 23, 2022
 """
 
 # from i24_database_api.DBReader import DBReader
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Manager
 import transformation 
 import change_stream_reader 
 import batch_update
+from ctypes import c_char_p
 
 if __name__=="__main__":
     # (Optional) Uncomment the following two lines if config.json cannot be loaded 
@@ -24,6 +25,9 @@ if __name__=="__main__":
     # - transform pushes mongoDB operation requests to this queue, which batch_update would listen from
     change_stream_connection = Queue()
     batch_update_connection = Queue()
+
+    manager=Manager()
+    mode = manager.Value(c_char_p,"")
     
     # start all 3 child processes
     print("[Main] Starting Change Stream process...")

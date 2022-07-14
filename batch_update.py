@@ -107,7 +107,7 @@ class BatchUpdate:
         """
         batch=[]
         temp_list = list(self._staleness)
-        if MODE=="RAW":
+        if MODE.value=="RAW":
             for key in temp_list:
                 batch.append(
                     UpdateOne(
@@ -131,7 +131,7 @@ class BatchUpdate:
                 self._staleness.pop(key)
                 self._cache_data.pop(key)
 
-        elif MODE =="RECONCILED":
+        elif MODE.value =="RECONCILED":
             for key in temp_list:
                 batch.append(
                     UpdateOne(
@@ -178,7 +178,7 @@ class BatchUpdate:
         staled_timestamps=[]
         subdoc_keys = list(timestamp_dict)
 
-        if MODE == "RAW":
+        if MODE.value == "RAW":
             for key in list(self._staleness):
                 if key in timestamp_dict:
                     # insert & update
@@ -223,7 +223,7 @@ class BatchUpdate:
                 self._cache_data[key].append([timestamp_dict[key][3]]) #l,w,h
                 self._staleness[key]=0
         
-        elif MODE == "RECONCILED":
+        elif MODE.value == "RECONCILED":
             for key in list(self._staleness):
                 if key in timestamp_dict:
                     # insert & update
@@ -284,8 +284,8 @@ class BatchUpdate:
                     self.write_to_mongo(self.clear_cache(MODE))
                     print('emptied cache')
                 continue
-            print("mode in batch_udpate"+obj_from_transformation)
-            break
+            # print("mode in batch_udpate"+obj_from_transformation)
+            
             staled_timestamps = self.add_to_cache(MODE, obj_from_transformation)
             # is_cache_emptied = False
             if staled_timestamps:

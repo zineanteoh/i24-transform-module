@@ -32,7 +32,7 @@ def resample(car, MODE):
     '''
 
     # Select time series only
-    if MODE == "RAW":
+    if MODE.value == "RAW":
         try:
             time_series_field = ["timestamp", "x_position", "y_position", "length", "width", "height"]
             data = {key: car[key] for key in time_series_field}
@@ -57,7 +57,7 @@ def resample(car, MODE):
             print("error resampling: {}".format(e))
         return car
 
-    elif MODE == "RECONCILED":
+    elif MODE.value == "RECONCILED":
         try:
             time_series_field = ["timestamp", "x_position", "y_position"]
             data = {key: car[key] for key in time_series_field}
@@ -152,7 +152,7 @@ class Transformation:
         vehicle_id = traj["_id"]
         configuration_id = traj["configuration_id"]
         batch_operations = {}
-        if MODE == "RAW":
+        if MODE.value == "RAW":
             # transform raw data
             for i in range(len(traj["timestamp"])):
                 time = round_and_truncate(traj["timestamp"][i], 5)
@@ -163,7 +163,7 @@ class Transformation:
                 w = traj["width"][i]
                 h = traj["height"][i]
                 batch_operations[time] = [configuration_id, vehicle_id, (x, y), (l, w, h)]
-        elif MODE == "RECONCILED":
+        elif MODE.value == "RECONCILED":
             # transform reconciled data
             for i in range(len(traj["timestamp"])):
                 time = round_and_truncate(traj["timestamp"][i], 5)
@@ -200,7 +200,7 @@ class Transformation:
             
             # get first doc to determine MODE
             first_doc = change_stream_connection.get()
-            MODE = self.determine_mode(first_doc)
+            MODE.value = self.determine_mode(first_doc)
             batch_operations = self.transform_trajectory(MODE, first_doc)
             batch_update_connection.put(batch_operations)
 
@@ -212,11 +212,11 @@ class Transformation:
         else:
             # Transformer is called from run_static_transformer.py
             # ... collection is static, so we can just read the collection
-            traj_doc = self.read_static_collection("config.json",1)
+            traj_doc = self.read_static_collection("config.json")
             for doc in traj_doc:
-                if MODE == "":
-                    MODE = self.determine_mode(doc)
-                    print('mode in transformation: '+MODE)
+                if MODE.value == "":
+                    MODE.value = self.determine_mode(doc)
+                    print('mode in transformation: '+MODE.value)
                 print("inserting doc: {}".format(doc["_id"]))
                 batch_operations = self.transform_trajectory(MODE, resample(doc, MODE))
                 batch_update_connection.put(batch_operations)
