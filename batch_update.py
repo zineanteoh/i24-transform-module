@@ -244,7 +244,7 @@ class BatchUpdate:
                                     "$set":
                                         {
                                             'timestamp':key,
-                                            'configuration_id':key[0]
+                                            'configuration_id':self._cache_data[key][0]
                                         },
                                     "$push":
                                         {
@@ -261,8 +261,8 @@ class BatchUpdate:
             for key in subdoc_keys:
                 self._cache_data[key]=[]
                 self._cache_data[key].append(timestamp_dict[key][0]) #config id
-                self._cache_data[key].append([timestamp_dict[key][0]]) #object id
-                self._cache_data[key].append([timestamp_dict[key][1]]) #x, y
+                self._cache_data[key].append([timestamp_dict[key][1]]) #object id
+                self._cache_data[key].append([timestamp_dict[key][2]]) #x, y
                 self._staleness[key]=0
         else:
             raise ValueError("Invalid MODE, must be either 'RAW' or 'RECONCILED'")

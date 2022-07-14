@@ -71,12 +71,9 @@ class ChangeStreamReader:
         pipeline = [{"$project":{"fullDocument._id":1,"fullDocument.timestamp":1,"fullDocument.x_position":1,"fullDocument.y_position":1,"fullDocument.configuration_id":1,"fullDocument.length":1,'fullDocument.width':1,'fullDocument.height':1}}]
         print("change stream being listened")
         try:
-            # resume_token = None
-            # pipeline = [{'$match': {'operationType': operation_type}}]
-            # with self._collection.watch(resume_after=resume_after) as stream:
             with self._collection.watch(pipeline=pipeline,resume_after=resume_after) as stream:
                 for insert_change in stream:
-                    print("[ChangeStreamReader] Read document {}".format(insert_change['fullDocument']['_id'])) #SEND
+                    # print("[ChangeStreamReader] Read document {}".format(insert_change['fullDocument']['_id'])) #SEND
                     change_stream_connection.put(insert_change['fullDocument']) 
                     resume_token = stream.resume_token
         except pymongo.errors.PyMongoError:

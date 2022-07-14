@@ -45,7 +45,7 @@ def resample(car, MODE):
             # df = df.resample('0.04s').mean() # close to 25Hz
             df=df.groupby(df.index.floor('0.04S')).mean().resample('0.04S').asfreq()
             df.index = df.index.values.astype('datetime64[ns]').astype('int64')*1e-9
-            df = df.interpolate(method='nearest')
+            df = df.interpolate(method='linear')
 
             car['x_position'] = df['x_position'].values
             car['y_position'] = df['y_position'].values
@@ -70,7 +70,7 @@ def resample(car, MODE):
             # df = df.resample('0.04s').mean() # close to 25Hz
             df=df.groupby(df.index.floor('0.04S')).mean().resample('0.04S').asfreq()
             df.index = df.index.values.astype('datetime64[ns]').astype('int64')*1e-9
-            df = df.interpolate(method='nearest')
+            df = df.interpolate(method='linear')
 
             car['x_position'] = df['x_position'].values
             car['y_position'] = df['y_position'].values
@@ -201,13 +201,13 @@ class Transformation:
             # get first doc to determine MODE
             first_doc = change_stream_connection.get()
             MODE.value = self.determine_mode(first_doc)
-            batch_operations = self.transform_trajectory(MODE, first_doc)
+            batch_operations = self.transform_trajectory(MODE, resample(first_doc, MODE))
             batch_update_connection.put(batch_operations)
 
             while True:
                 traj_doc = change_stream_connection.get()
                 # print("[transformation] received doc")
-                batch_operations = self.transform_trajectory(MODE, traj_doc)
+                batch_operations = self.transform_trajectory(MODE, resample(traj_doc, MODE))
                 batch_update_connection.put(batch_operations)
         else:
             # Transformer is called from run_static_transformer.py
