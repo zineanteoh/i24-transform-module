@@ -68,12 +68,12 @@ class ChangeStreamReader:
         :params change_stream_connection: a multiprocessing Queue
         :params resume_after: stream token to resume listening from change stream if cursor failed
         """
+        pipeline = [{"$project":{"fullDocument._id":1,"fullDocument.timestamp":1,"fullDocument.x_position":1,"fullDocument.y_position":1,"fullDocument.configuration_id":1,"fullDocument.length":1,'fullDocument.width':1,'fullDocument.height':1}}]
         print("change stream being listened")
         try:
             # resume_token = None
             # pipeline = [{'$match': {'operationType': operation_type}}]
             # with self._collection.watch(resume_after=resume_after) as stream:
-            pipeline = [{"$project":{"fullDocument._id":1,"fullDocument.timestamp":1,"fullDocument.x_position":1,"fullDocument.y_position":1}}]
             with self._collection.watch(pipeline=pipeline,resume_after=resume_after) as stream:
                 for insert_change in stream:
                     print("[ChangeStreamReader] Read document {}".format(insert_change['fullDocument']['_id'])) #SEND

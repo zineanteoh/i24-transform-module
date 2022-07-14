@@ -15,6 +15,10 @@ if __name__=="__main__":
     # path_to_directory = "/isis/home/teohz/Desktop/i24-transform-module"
     # os.chdir(path_to_directory)
 
+    # Mode for the transformation module, automatically determined
+    # ... initialize as None
+    mode = None
+
     # initialize Queue for multiprocessing
     # - change_stream_reader pushes trajectories to this queue, which transform would listen from
     # - transform pushes mongoDB operation requests to this queue, which batch_update would listen from
@@ -27,11 +31,11 @@ if __name__=="__main__":
     proc_change_stream.start()
     
     print("[Main] Starting Transformation process...")
-    proc_transform = Process(target=transformation.run, args=(change_stream_connection, batch_update_connection, ))
+    proc_transform = Process(target=transformation.run, args=(mode, change_stream_connection, batch_update_connection, ))
     proc_transform.start()
 
     print("[Main] Starting Batch Update process...")
-    proc_batch_update = Process(target=batch_update.run, args=(batch_update_connection, ))
+    proc_batch_update = Process(target=batch_update.run, args=(mode, batch_update_connection, ))
     proc_batch_update.start()
     
     proc_change_stream.join()
