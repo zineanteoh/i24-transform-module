@@ -113,6 +113,11 @@ class Transformation:
         _database=client[database]
         _collection=_database[collection]
 
+        try:
+            _database.validate_collection(_collection)  # Try to validate a collection
+        except pymongo.errors.OperationFailure:  # If the collection doesn't exist
+            raise Exception("This collection doesn't exist")
+
         if num_of_docs:
             cursor= _collection.find({},{"_id":1,"timestamp":1,"x_position":1,"y_position":1, "configuration_id":1,"length":1,"width":1,"height":1}).sort([("first_timestamp",pymongo.ASCENDING),("last_timestamp",pymongo.ASCENDING)]).limit(num_of_docs)
         else:
@@ -217,10 +222,10 @@ class Transformation:
                 if MODE.value == "":
                     MODE.value = self.determine_mode(doc)
                     print('mode in transformation: '+MODE.value)
-                print("inserting doc: {}".format(doc["_id"]))
+                print("[Transformation]: processing doc: {}".format(doc["_id"]))
                 batch_operations = self.transform_trajectory(MODE, resample(doc, MODE))
                 batch_update_connection.put(batch_operations)
-                print('put into batch_update')
+                print('[Transformation]: moving doc into the next process (batch_update.py)')
 
 def run(MODE, change_stream_connection, batch_update_connection):
     if change_stream_connection == None:

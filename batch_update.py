@@ -98,12 +98,12 @@ class BatchUpdate:
             self._collection.bulk_write(staled_timestamps,ordered=False)
         except BulkWriteError as bwe:
             pprint(bwe.details)
-        print("[BatchUpdate] inserted batch at time {}".format(str(time.time())))
+        print("[BatchUpdate] executed batch to MongoDB at time {}".format(str(time.time())))
 
     def clear_cache(self, MODE):
         """
         Returns a list of MongoDB commands from the remaining timestamps inside of _staleness dictionary
-        :returns batch: a list of MongoDB UpdateOne() commands (upsert = True)
+        :returns batch: a list of MongoDB UpdateOne() commands (upsert = True) that came from what was in cache
         """
         batch=[]
         temp_list = list(self._staleness)
@@ -127,7 +127,7 @@ class BatchUpdate:
                         }, upsert=True)
                     )
 
-                print("[BatchUpdate] clearing from cache the timestamp: {}".format(key))
+                print("[BatchUpdate] clearing from cache the timestamp: {} and inserting write command into batch".format(key))
                 self._staleness.pop(key)
                 self._cache_data.pop(key)
 
@@ -150,7 +150,7 @@ class BatchUpdate:
                         }, upsert=True)
                     )
                 
-                print("[BatchUpdate] clearing from cache the timestamp: {}".format(key))
+                print("[BatchUpdate] clearing from cache the timestamp: {} and inserting write command into batch".format(key))
                 self._staleness.pop(key)
                 self._cache_data.pop(key)
 
@@ -210,7 +210,7 @@ class BatchUpdate:
                                         }
                                 }, upsert=True)
                             )
-                        print("[BatchUpdate] Automatically removing staled timestamp: {}".format(key))
+                        print("[BatchUpdate] Automatically removing staled timestamp: {} and inserting write command into batch".format(key))
                         self._staleness.pop(key)
                         self._cache_data.pop(key)
             # new keys that are in subdoc but not in staleness
@@ -253,7 +253,7 @@ class BatchUpdate:
                                         }
                                 },upsert=True)
                             )
-                        print("[BatchUpdate] Automatically removing staled timestamp: {}".format(key))
+                        print("[BatchUpdate] Automatically removing staled timestamp: {} and inserting write command into batch".format(key))
                         self._staleness.pop(key)
                         self._cache_data.pop(key)
             # new keys that are in subdoc but not in staleness
@@ -281,8 +281,9 @@ class BatchUpdate:
                 obj_from_transformation = batch_update_connection.get(timeout=5)
             except queue.Empty:
                 if batch_update_connection.empty() and len(self._cache_data)>0:
-                    self.write_to_mongo(self.clear_cache(MODE))
-                    print('emptied cache')
+                    writes_from_cache=self.clear_cache(MODE)
+                    self.write_to_mongo(writes_from_cache)
+                    print('emptied cache and executed batch to MongoBD')
                 continue
             # print("mode in batch_udpate"+obj_from_transformation)
             
