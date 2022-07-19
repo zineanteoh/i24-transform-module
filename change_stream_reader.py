@@ -54,12 +54,7 @@ class ChangeStreamReader:
     
         self._database=self.client[database]
         self._collection=self._database[collection]
-
-        try:
-            self._database.validate_collection(self._collection)  # Try to validate a collection
-        except pymongo.errors.OperationFailure:  # If the collection doesn't exist
-            raise Exception("This collection doesn't exist")
-
+        
         try:
             self.client.admin.command('ping')
         except pymongo.errors.ConnectionFailure:
